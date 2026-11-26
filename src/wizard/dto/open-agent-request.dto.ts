@@ -117,3 +117,8 @@ export class OpenAgentRequestDto {
   @Type(() => OpenAgentImageDto)
   images?: OpenAgentImageDto[];
 }
+
+export class OpenConversationMessageDto extends OpenAgentRequestDto {
+  @IsUUID()
+  client_request_id: string;
+}

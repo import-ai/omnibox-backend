@@ -24,7 +24,7 @@ import { ConversationAttachmentsService } from './conversation-attachments.servi
 import { OpenConversationAttachmentsController } from './open.conversation-attachments.controller';
 
 @Module({
-  exports: [AttachmentsService],
+  exports: [AttachmentsService, ConversationAttachmentsService],
   providers: [AttachmentsService, ConversationAttachmentsService],
   controllers: [
     AttachmentsController,

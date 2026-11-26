@@ -1,5 +1,6 @@
-import { HttpStatus, MessageEvent } from '@nestjs/common';
+import { HttpException, HttpStatus, MessageEvent } from '@nestjs/common';
 import { AgentStream } from 'omniboxd/agent-stream-hooks/agent-stream-hooks.interface';
+import { behaviorContext } from 'omniboxd/behavior/behavior-context';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import {
   MessageStatus,
@@ -7,8 +8,22 @@ import {
 } from 'omniboxd/messages/entities/message.entity';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { ShareType } from 'omniboxd/shares/entities/share.entity';
-import { StreamService } from 'omniboxd/wizard/stream.service';
-import { Observable } from 'rxjs';
+import {
+  type ConversationSubmission,
+  ConversationSubmissions,
+  submissionFingerprint,
+} from 'omniboxd/wizard/conversation-submissions';
+import { AgentRequestChannel } from 'omniboxd/wizard/dto/agent-request.dto';
+import { OpenWizardController } from 'omniboxd/wizard/open.wizard.controller';
+import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
+import { IS_SAVE_PENDING, saveGateKey } from 'omniboxd/wizard/save-gate';
+import {
+  collectPausedResumeBehaviors,
+  StreamService,
+} from 'omniboxd/wizard/stream.service';
+import { getStreamKey } from 'omniboxd/wizard/stream-key';
+import { WizardController } from 'omniboxd/wizard/wizard.controller';
+import { Observable, of } from 'rxjs';
 
 function createService(mocks: {
   configService?: { get: jest.Mock };
@@ -19,6 +34,8 @@ function createService(mocks: {
   sharedResourcesService?: Record<string, jest.Mock>;
   resourcesService?: Record<string, jest.Mock>;
   traceService?: Record<string, jest.Mock>;
+  behaviorService?: Record<string, jest.Mock>;
+  agentStreamHooks?: Record<string, jest.Mock>;
 }) {
   return new StreamService(
     (mocks.configService ?? { get: jest.fn() }) as any,
@@ -36,11 +53,12 @@ function createService(mocks: {
     mocks.resourcesService as any,
     { t: jest.fn((key: string) => key) } as any,
     { mint: jest.fn(() => 'share-access-token') } as any,
-    {
+    (mocks.agentStreamHooks ?? {
       onCallCompleted: jest.fn().mockResolvedValue(undefined),
       onStreamClosed: jest.fn().mockResolvedValue(undefined),
-    } as any,
+    }) as any,
     mocks.traceService as any,
+    mocks.behaviorService as any,
   );
 }
 
@@ -588,6 +606,7 @@ describe('StreamService visible resource expansion gating', () => {
       'request-id',
       expect.any(AbortSignal),
       { baseUrl: 'http://wizard', target: 'core' },
+      undefined,
     );
   });
 
@@ -616,6 +635,7 @@ describe('StreamService visible resource expansion gating', () => {
       'request-id',
       expect.any(AbortSignal),
       { baseUrl: 'http://wizard-pro', target: 'pro' },
+      undefined,
     );
   });
 
@@ -1080,6 +1100,7 @@ describe('StreamService parent resolution', () => {
         message: { role: 'assistant' },
         attrs: { tool_call: { interrupts: [{ id: 'call-1' }] } },
       }),
+      hasChildren: jest.fn().mockResolvedValue(false),
     };
     const service = serviceWith(messagesService);
 
@@ -1145,6 +1166,7 @@ describe('StreamService parent resolution', () => {
     const messagesService = {
       findOneInConversation: jest.fn().mockResolvedValue(interruptMessage),
       hasChildren: jest.fn().mockResolvedValue(false),
+      update: jest.fn(),
     };
     const service = lockedServiceWith(messagesService);
 
@@ -1161,6 +1183,7 @@ describe('StreamService parent resolution', () => {
       'interrupt-id',
       'conversation-id',
     );
+    expect(messagesService.update).not.toHaveBeenCalled();
   });
 
   it('refuses to decide an interrupt that already has a reply', async () => {
@@ -1281,9 +1304,11 @@ describe('StreamService parent resolution', () => {
     });
 
     it('refuses to resume a decision that already has a tool result', async () => {
+      const update = jest.fn();
       const service = serviceWithMessages({
         findOneInConversation: jest.fn().mockResolvedValue(decision),
         findChildren: jest.fn().mockResolvedValue([toolResult]),
+        update,
       });
 
       const error = await resolve(service, decisionsUnder('decision-d')).catch(
@@ -1294,12 +1319,24 @@ describe('StreamService parent resolution', () => {
         code: 'interrupt_already_decided',
         message_id: 'decision-d',
       });
+      expect(update).not.toHaveBeenCalled();
     });
 
     it('resumes again a decision whose resume only left a failed reply', async () => {
+      const stored = {
+        ...decision,
+        attrs: {
+          tool_call: {
+            decisions: [{ type: 'reject' }],
+          },
+        },
+      };
       const service = serviceWithMessages({
-        findOneInConversation: jest.fn().mockResolvedValue(decision),
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
         findChildren: jest.fn().mockResolvedValue([failedReply]),
+        update: jest.fn((_id, _namespaceId, _conversationId, dto) =>
+          Promise.resolve({ ...stored, attrs: dto.attrs }),
+        ),
       });
 
       await expect(
@@ -1361,9 +1398,11 @@ describe('StreamService parent resolution', () => {
     ] as const)(
       'refuses a question (%s parent %j) under a decision that was not applied',
       async (mode, body, lookups) => {
+        const update = jest.fn();
         const service = serviceWithMessages({
           findOneInConversation: jest.fn().mockResolvedValue(decision),
           findChildren: jest.fn().mockResolvedValue([failedReply]),
+          update,
           ...lookups,
         });
 
@@ -1376,6 +1415,7 @@ describe('StreamService parent resolution', () => {
           message_id: 'decision-d',
           interrupt_count: 2,
         });
+        expect(update).not.toHaveBeenCalled();
       },
     );
 
@@ -1400,6 +1440,1335 @@ describe('StreamService parent resolution', () => {
       });
 
       await expect(resolve(service, {}, 'latest')).resolves.toBe('failed-f');
+    });
+
+    const rejectDecisions = [
+      {
+        type: 'reject',
+        message: '用户没有批准这个操作，而是发送了新的消息，请不要重试该操作。',
+        end_turn: true,
+      },
+      {
+        type: 'reject',
+        message: '用户没有批准这个操作，而是发送了新的消息，请不要重试该操作。',
+        end_turn: true,
+      },
+    ];
+
+    function storedDecision(decisions: object[]) {
+      return {
+        id: 'decision-d',
+        parentId: 'interrupt-id',
+        conversationId: 'conversation-id',
+        message: { role: 'user', content: '' },
+        attrs: {
+          composer: { content: '' },
+          context: { edition: 'pro' },
+          tool_call: { decisions },
+        },
+      };
+    }
+
+    it('overwrites the stored decisions of a decision that was not applied', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn(
+        (_id: string, _namespaceId: string, _conversationId: string, dto) =>
+          Promise.resolve({ ...stored, attrs: dto.attrs }),
+      );
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+
+      expect(update).toHaveBeenCalledWith(
+        'decision-d',
+        'namespace-id',
+        'conversation-id',
+        {
+          attrs: {
+            composer: { content: '' },
+            context: { edition: 'pro' },
+            tool_call: { decisions: rejectDecisions },
+          },
+        },
+        false,
+      );
+    });
+
+    it('refuses a decision whose stored decision count does not match the request', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn();
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: [{ type: 'reject', end_turn: true }] },
+      }).catch((e: unknown) => e);
+
+      expect(error).toMatchObject({ code: 'INVALID_DECISIONS' });
+      expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+      expect(error.getResponse()).toMatchObject({
+        code: 'invalid_decisions',
+        message_id: 'decision-d',
+      });
+      expect(update).not.toHaveBeenCalled();
+      expect(stored.attrs.tool_call.decisions).toEqual([
+        { type: 'approve' },
+        { type: 'approve' },
+      ]);
+    });
+
+    function unlockedServiceWith(messagesService: Record<string, jest.Mock>) {
+      const service = createService({ messagesService });
+      jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+      return service;
+    }
+
+    it('applies the request decisions without a conversation lock', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn(
+        (_id: string, _namespaceId: string, _conversationId: string, dto) =>
+          Promise.resolve({ ...stored, attrs: dto.attrs }),
+      );
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+
+      expect(update).toHaveBeenCalledTimes(1);
+      expect(update).toHaveBeenCalledWith(
+        'decision-d',
+        'namespace-id',
+        'conversation-id',
+        {
+          attrs: {
+            composer: { content: '' },
+            context: { edition: 'pro' },
+            tool_call: { decisions: rejectDecisions },
+          },
+        },
+        false,
+      );
+    });
+
+    it('runs the question guards without a conversation lock and does not write', async () => {
+      const findOneInConversation = jest.fn().mockResolvedValue({
+        id: 'answer-1',
+        message: { role: 'assistant' },
+        attrs: {},
+      });
+      const update = jest.fn();
+      const service = unlockedServiceWith({ findOneInConversation, update });
+
+      await expect(
+        resolve(service, { parent_message_id: 'answer-1', query: 'hello' }),
+      ).resolves.toBe('answer-1');
+
+      expect(findOneInConversation).toHaveBeenCalledWith(
+        'answer-1',
+        'conversation-id',
+        'user-id',
+      );
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('refuses text under an unapplied decision without a conversation lock', async () => {
+      const create = jest.fn();
+      const update = jest.fn();
+      const service = unlockedServiceWith({
+        findOneInConversation: jest
+          .fn()
+          .mockResolvedValue(storedDecision(rejectDecisions)),
+        findChildren: jest.fn().mockResolvedValue([]),
+        create,
+        update,
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'decision-d',
+        query: 'more text',
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'decision_not_applied',
+        message_id: 'decision-d',
+      });
+      expect(create).not.toHaveBeenCalled();
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('refuses text under a failed empty reply of an unapplied decision', async () => {
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn((id: string) =>
+          Promise.resolve(id === 'failed-f' ? failedReply : decision),
+        ),
+        findChildren: jest.fn().mockResolvedValue([]),
+        create: jest.fn(),
+        update: jest.fn(),
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'failed-f',
+        query: 'more text',
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'decision_not_applied',
+        message_id: 'decision-d',
+      });
+    });
+
+    it('refuses text under a pending interrupt without a conversation lock', async () => {
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(interruptMessage),
+        create: jest.fn(),
+        update: jest.fn(),
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'interrupt-id',
+        query: 'more text',
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'pending_interrupt',
+        message_id: 'interrupt-id',
+      });
+    });
+
+    it('rejects a question whose parent cannot be loaded without a lock', async () => {
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(null),
+        update: jest.fn(),
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'missing',
+        query: 'hello',
+      }).catch((e: unknown) => e);
+
+      expect(error).toMatchObject({ code: 'PARENT_CONVERSATION_MISMATCH' });
+    });
+
+    it('follows the newest message below a stale parent without a lock', async () => {
+      const raw = { id: 'question-1', message: { role: 'user' }, attrs: {} };
+      const leaf = {
+        id: 'answer-2',
+        message: { role: 'assistant', content: '' },
+        status: 'streaming',
+        attrs: {},
+      };
+      const create = jest.fn();
+      const update = jest.fn();
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findLeafBelow: jest.fn().mockResolvedValue(leaf),
+        create,
+        update,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'question-1',
+          follow_latest: true,
+          query: 'more text',
+        }),
+      ).resolves.toBe('answer-2');
+
+      expect(create).not.toHaveBeenCalled();
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('keeps the raw parent when nothing sits below it without a lock', async () => {
+      const raw = {
+        id: 'answer-1',
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findLeafBelow: jest.fn().mockResolvedValue(null),
+        create: jest.fn(),
+        update: jest.fn(),
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'answer-1',
+          follow_latest: true,
+          query: 'more text',
+        }),
+      ).resolves.toBe('answer-1');
+    });
+
+    it('refuses a followed leaf that is an unapplied decision without a lock', async () => {
+      const raw = { id: 'answer-1', message: { role: 'assistant' }, attrs: {} };
+      const create = jest.fn();
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findLeafBelow: jest.fn().mockResolvedValue(decision),
+        findChildren: jest.fn().mockResolvedValue([]),
+        create,
+        update: jest.fn(),
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'answer-1',
+        follow_latest: true,
+        query: 'more text',
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'decision_not_applied',
+        message_id: 'decision-d',
+      });
+      expect(create).not.toHaveBeenCalled();
+    });
+
+    it('ignores follow_latest for a decision resume without a lock', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const findLeafBelow = jest.fn();
+      const update = jest.fn(
+        (_id: string, _namespaceId: string, _conversationId: string, dto) =>
+          Promise.resolve({ ...stored, attrs: dto.attrs }),
+      );
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        findLeafBelow,
+        update,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          follow_latest: true,
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+
+      expect(findLeafBelow).not.toHaveBeenCalled();
+      expect(update).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses a decision resume while the conversation is streaming without a lock', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn();
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+      (service as any).streamSessions.set(
+        'user:user-id:namespace-id:conversation-id',
+        { finished: false },
+      );
+
+      const error = await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({ code: 'conversation_busy' });
+      expect(error.getStatus()).toBe(HttpStatus.CONFLICT);
+      expect(update).not.toHaveBeenCalled();
+      expect(stored.attrs.tool_call.decisions).toEqual([
+        { type: 'approve' },
+        { type: 'approve' },
+      ]);
+    });
+
+    it('reserves the stream while a no-lock decision write is in flight', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      let releaseUpdate!: () => void;
+      const update = jest.fn(
+        () =>
+          new Promise((resolve) => {
+            releaseUpdate = () =>
+              resolve({
+                ...stored,
+                attrs: {
+                  ...stored.attrs,
+                  tool_call: { decisions: rejectDecisions },
+                },
+              });
+          }),
+      );
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      const first = resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      });
+      await new Promise((done) => setImmediate(done));
+      expect(update).toHaveBeenCalledTimes(1);
+
+      const second = await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(second.getResponse()).toMatchObject({ code: 'conversation_busy' });
+      expect(update).toHaveBeenCalledTimes(1);
+
+      releaseUpdate();
+      await expect(first).resolves.toBe('decision-d');
+      expect(update).toHaveBeenCalledTimes(1);
+    });
+
+    it('releases the reservation when the no-lock decision write fails', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest
+        .fn()
+        .mockRejectedValueOnce(new Error('db down'))
+        .mockResolvedValue({
+          ...stored,
+          attrs: { ...stored.attrs, tool_call: { decisions: rejectDecisions } },
+        });
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).rejects.toThrow('db down');
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+      expect(update).toHaveBeenCalledTimes(2);
+    });
+
+    it('ignores an expired stream reservation', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn().mockResolvedValue({
+        ...stored,
+        attrs: { ...stored.attrs, tool_call: { decisions: rejectDecisions } },
+      });
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+      (service as any).pendingStreamReservations.set(
+        'user:user-id:namespace-id:conversation-id',
+        { token: 'stale-owner', reservedAt: Date.now() - 120_000 },
+      );
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+      expect(update).toHaveBeenCalledTimes(1);
+    });
+
+    it('reserves a no-lock latest decision resume', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      let releaseUpdate!: () => void;
+      const update = jest.fn(
+        () =>
+          new Promise((resolve) => {
+            releaseUpdate = () =>
+              resolve({
+                ...stored,
+                attrs: {
+                  ...stored.attrs,
+                  tool_call: { decisions: rejectDecisions },
+                },
+              });
+          }),
+      );
+      const service = unlockedServiceWith({
+        findLatest: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      const first = resolve(
+        service,
+        { tool_call: { decisions: rejectDecisions } },
+        'latest',
+      );
+      await new Promise((done) => setImmediate(done));
+      expect(update).toHaveBeenCalledTimes(1);
+
+      const second = await resolve(
+        service,
+        { tool_call: { decisions: rejectDecisions } },
+        'latest',
+      ).catch((e: unknown) => e);
+      expect(second.getResponse()).toMatchObject({ code: 'conversation_busy' });
+      expect(update).toHaveBeenCalledTimes(1);
+
+      releaseUpdate();
+      await expect(first).resolves.toBe('decision-d');
+    });
+
+    it('keeps the conversation usable after a synchronous stream start failure', async () => {
+      const stored = { ...storedDecision(rejectDecisions), parentId: null };
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        findAll: jest.fn().mockResolvedValue([stored]),
+        update: jest.fn(),
+      });
+
+      const error = await (service as any)
+        .createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: '',
+            parent_message_id: 'decision-d',
+            tools: { broken: true },
+            channel: 'mobile',
+            tool_call: { decisions: rejectDecisions },
+          },
+          'request-id',
+          'ask',
+          'user-id',
+        )
+        .catch((failure: unknown) => failure);
+
+      expect(error).toBeInstanceOf(TypeError);
+      expect((service as any).streamSessions.size).toBe(0);
+      expect((service as any).pendingStreamReservations.size).toBe(0);
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+    });
+
+    it('clears the claimed stream key when the start fails synchronously', async () => {
+      const stored = { ...storedDecision(rejectDecisions), parentId: null };
+      const del = jest.fn().mockResolvedValue(1);
+      const set = jest.fn().mockResolvedValue('OK');
+      const service = createService({});
+      (service as any).messagesService = {
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        findAll: jest.fn().mockResolvedValue([stored]),
+        update: jest.fn(),
+      };
+      jest
+        .spyOn(service, 'acquireConversationLock')
+        .mockResolvedValue(jest.fn().mockResolvedValue(undefined));
+      (service as any).redisClient = { isOpen: true, del, set };
+
+      const error = await (service as any)
+        .createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: '',
+            parent_message_id: 'decision-d',
+            tools: { broken: true },
+            channel: 'mobile',
+            tool_call: { decisions: rejectDecisions },
+          },
+          'request-id',
+          'ask',
+          'user-id',
+        )
+        .catch((failure: unknown) => failure);
+      await new Promise((done) => setImmediate(done));
+
+      expect(error).toBeInstanceOf(TypeError);
+      expect(set).toHaveBeenCalledWith(
+        'wizard:stream:user:user-id:namespace-id:conversation-id:active',
+        '1',
+        { EX: expect.any(Number) },
+      );
+      expect(del).toHaveBeenCalledWith(
+        'wizard:stream:user:user-id:namespace-id:conversation-id:active',
+      );
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+    });
+
+    it('clears the claimed stream key when the post-check refuses', async () => {
+      const raw = {
+        id: 'answer-1',
+        parentId: null,
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      const del = jest.fn().mockResolvedValue(1);
+      const set = jest.fn().mockResolvedValue('OK');
+      const service = createService({});
+      (service as any).messagesService = {
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findAll: jest.fn().mockResolvedValue([raw]),
+        create: jest.fn(),
+      };
+      jest
+        .spyOn(service, 'acquireConversationLock')
+        .mockResolvedValue(jest.fn().mockResolvedValue(undefined));
+      (service as any).redisClient = { isOpen: true, del, set };
+      (service as any).streamSessions.set(
+        'user:user-id:namespace-id:conversation-id',
+        { finished: false },
+      );
+
+      await expect(
+        (service as any).createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: 'text',
+            parent_message_id: 'answer-1',
+            tools: [],
+            channel: 'mobile',
+          },
+          'request-id',
+          'ask',
+          'user-id',
+        ),
+      ).rejects.toMatchObject({ code: 'CONVERSATION_BUSY' });
+      await new Promise((done) => setImmediate(done));
+
+      expect(del).toHaveBeenCalledWith(
+        'wizard:stream:user:user-id:namespace-id:conversation-id:active',
+      );
+    });
+
+    it('refuses a same-key text start while a decision write is reserved', async () => {
+      const key = 'user:user-id:namespace-id:conversation-id';
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      let releaseUpdate!: () => void;
+      const update = jest.fn(
+        () =>
+          new Promise((resolve) => {
+            releaseUpdate = () =>
+              resolve({
+                ...stored,
+                attrs: {
+                  ...stored.attrs,
+                  tool_call: { decisions: rejectDecisions },
+                },
+              });
+          }),
+      );
+      const raw = {
+        id: 'answer-1',
+        parentId: null,
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn((id: string) =>
+          Promise.resolve(id === 'decision-d' ? stored : raw),
+        ),
+        findChildren: jest.fn().mockResolvedValue([]),
+        findAll: jest.fn().mockResolvedValue([raw]),
+        create: jest.fn(),
+        update,
+      });
+
+      const first = resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      });
+      await new Promise((done) => setImmediate(done));
+      expect(update).toHaveBeenCalledTimes(1);
+      expect((service as any).pendingStreamReservations.has(key)).toBe(true);
+
+      await expect(
+        (service as any).createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: 'text',
+            parent_message_id: 'answer-1',
+            tools: [],
+            channel: 'mobile',
+          },
+          'request-text',
+          'ask',
+          'user-id',
+        ),
+      ).rejects.toMatchObject({ code: 'CONVERSATION_BUSY' });
+      expect((service as any).streamSessions.size).toBe(0);
+
+      releaseUpdate();
+      await expect(first).resolves.toBe('decision-d');
+      expect(update).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses a prepared text start once a decision resume holds the reservation', async () => {
+      const key = 'user:user-id:namespace-id:conversation-id';
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const interrupt = {
+        id: 'interrupt-id',
+        parentId: null,
+        message: { role: 'assistant', content: 'ask' },
+        attrs: {},
+      };
+      const raw = {
+        id: 'answer-1',
+        parentId: null,
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      const update = jest.fn(
+        (
+          _id: string,
+          _namespaceId: string,
+          _conversationId: string,
+          dto: { attrs: object },
+        ) => Promise.resolve({ ...stored, attrs: dto.attrs }),
+      );
+      const wizardStream = jest.fn<Promise<Response>, unknown[]>(
+        () => new Promise<Response>(() => {}),
+      );
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn((id: string) =>
+          Promise.resolve(id === 'decision-d' ? stored : raw),
+        ),
+        findChildren: jest.fn().mockResolvedValue([]),
+        findAll: jest.fn().mockResolvedValue([raw, interrupt, stored]),
+        update,
+        create: jest.fn().mockResolvedValue({
+          id: 'question-1',
+          parentId: 'answer-1',
+          status: 'success',
+          message: { role: 'user', content: 'text' },
+          attrs: {},
+          createdAt: new Date(),
+        }),
+      });
+      jest
+        .spyOn(service as any, 'agentHandler')
+        .mockReturnValue(jest.fn().mockResolvedValue(undefined));
+      (service as any).wizardApiService = {
+        resolveAgentTarget: jest
+          .fn()
+          .mockResolvedValue({ baseUrl: 'http://wizard-pro', target: 'pro' }),
+        createAgentStream: wizardStream,
+      };
+
+      const decision = await (service as any).createAgentStream(
+        'namespace-id',
+        {
+          conversation_id: 'conversation-id',
+          query: '',
+          parent_message_id: 'decision-d',
+          tools: [],
+          channel: 'mobile',
+          tool_call: { decisions: rejectDecisions },
+        },
+        'request-decision',
+        'ask',
+        'user-id',
+      );
+      const failure = await (service as any)
+        .createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: 'text',
+            parent_message_id: 'answer-1',
+            tools: [],
+            channel: 'mobile',
+          },
+          'request-text',
+          'ask',
+          'user-id',
+        )
+        .catch((error: unknown) => error);
+      expect((failure as AppException).getResponse()).toMatchObject({
+        code: 'conversation_busy',
+      });
+      decision.subscribe({});
+      expect((service as any).streamSessions.has(key)).toBe(true);
+      expect((service as any).pendingStreamReservations.has(key)).toBe(false);
+      expect(update).toHaveBeenCalledTimes(1);
+
+      await new Promise((done) => setImmediate(done));
+      expect(wizardStream).toHaveBeenCalledTimes(1);
+      expect(wizardStream.mock.calls[0][2]).toMatchObject({
+        tool_call: { decisions: rejectDecisions },
+      });
+    });
+
+    it('registers only the first of two prepared text starts', async () => {
+      const key = 'user:user-id:namespace-id:conversation-id';
+      const raw = {
+        id: 'answer-1',
+        parentId: null,
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      const wizardStream = jest.fn<Promise<Response>, unknown[]>(
+        () => new Promise<Response>(() => {}),
+      );
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findAll: jest.fn().mockResolvedValue([raw]),
+        create: jest.fn().mockImplementation((...args: unknown[]) => {
+          const body = args[3] as { message: { content: string } };
+          return Promise.resolve({
+            id: `question-${body.message.content}`,
+            parentId: 'answer-1',
+            status: 'success',
+            message: { role: 'user', content: body.message.content },
+            attrs: {},
+            createdAt: new Date(),
+          });
+        }),
+      });
+      jest
+        .spyOn(service as any, 'agentHandler')
+        .mockReturnValue(jest.fn().mockResolvedValue(undefined));
+      (service as any).wizardApiService = {
+        resolveAgentTarget: jest
+          .fn()
+          .mockResolvedValue({ baseUrl: 'http://wizard-pro', target: 'pro' }),
+        createAgentStream: wizardStream,
+      };
+
+      const first = await (service as any).createAgentStream(
+        'namespace-id',
+        {
+          conversation_id: 'conversation-id',
+          query: 'one',
+          parent_message_id: 'answer-1',
+          tools: [],
+          channel: 'mobile',
+        },
+        'request-1',
+        'ask',
+        'user-id',
+      );
+      const failure = await (service as any)
+        .createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: 'two',
+            parent_message_id: 'answer-1',
+            tools: [],
+            channel: 'mobile',
+          },
+          'request-2',
+          'ask',
+          'user-id',
+        )
+        .catch((error: unknown) => error);
+      first.subscribe({});
+      expect((failure as AppException).getResponse()).toMatchObject({
+        code: 'conversation_busy',
+      });
+      expect((service as any).streamSessions.has(key)).toBe(true);
+      expect((service as any).streamSessions.size).toBe(1);
+
+      await new Promise((done) => setImmediate(done));
+      expect(wizardStream).toHaveBeenCalledTimes(1);
+      expect(wizardStream.mock.calls[0][2]).toMatchObject({ query: 'one' });
+    });
+
+    it('does not release a newer reservation with a stale owner token', async () => {
+      const key = 'user:user-id:namespace-id:conversation-id';
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      let rejectUpdate!: (error: Error) => void;
+      const update = jest.fn(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectUpdate = reject;
+          }),
+      );
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      const first = resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      });
+      await new Promise((done) => setImmediate(done));
+      const owner = (service as any).pendingStreamReservations.get(key);
+      expect(owner?.token).toEqual(expect.any(String));
+      const newer = { token: 'newer-owner', reservedAt: Date.now() };
+      (service as any).pendingStreamReservations.set(key, newer);
+
+      rejectUpdate(new Error('db down'));
+      await expect(first).rejects.toThrow('db down');
+      expect((service as any).pendingStreamReservations.get(key)).toEqual(
+        newer,
+      );
+    });
+
+    it('clears the claimed stream key when the lock release fails', async () => {
+      const raw = {
+        id: 'answer-1',
+        parentId: null,
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      const del = jest.fn().mockResolvedValue(1);
+      const set = jest.fn().mockResolvedValue('OK');
+      const service = createService({});
+      (service as any).messagesService = {
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findAll: jest.fn().mockResolvedValue([raw]),
+        create: jest.fn(),
+      };
+      jest
+        .spyOn(service, 'acquireConversationLock')
+        .mockResolvedValue(
+          jest.fn().mockRejectedValue(new Error('lock release failed')),
+        );
+      (service as any).redisClient = { isOpen: true, del, set };
+
+      await expect(
+        (service as any).createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: 'text',
+            parent_message_id: 'answer-1',
+            tools: [],
+            channel: 'mobile',
+          },
+          'request-id',
+          'ask',
+          'user-id',
+        ),
+      ).rejects.toThrow('lock release failed');
+      await new Promise((done) => setImmediate(done));
+
+      const activeKey =
+        'wizard:stream:user:user-id:namespace-id:conversation-id:active';
+      expect(set).toHaveBeenCalledWith(activeKey, '1', {
+        EX: expect.any(Number),
+      });
+      expect(del).toHaveBeenCalledWith(activeKey);
+    });
+
+    it('does not clear another request key after a no-op claim', async () => {
+      const key = 'user:user-id:namespace-id:conversation-id';
+      const raw = {
+        id: 'answer-1',
+        parentId: null,
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      let resolveFindAll!: (value: object[]) => void;
+      const findAll = jest.fn(
+        () =>
+          new Promise<object[]>((resolve) => {
+            resolveFindAll = resolve;
+          }),
+      );
+      const del = jest.fn().mockResolvedValue(1);
+      const service = createService({});
+      (service as any).messagesService = {
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findAll,
+        create: jest.fn(),
+      };
+      (service as any).streamSessions.set(key, { finished: false });
+
+      const pending = (service as any)
+        .createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: 'text',
+            parent_message_id: 'answer-1',
+            tools: [],
+            channel: 'mobile',
+          },
+          'request-id',
+          'ask',
+          'user-id',
+        )
+        .catch((error: unknown) => error);
+      await new Promise((done) => setImmediate(done));
+      // Redis recovered after this request's claim was a no-op.
+      (service as any).redisClient = { isOpen: true, del, set: jest.fn() };
+      resolveFindAll([raw]);
+
+      const error = await pending;
+      expect(error).toMatchObject({ code: 'CONVERSATION_BUSY' });
+      await new Promise((done) => setImmediate(done));
+      expect(del).not.toHaveBeenCalled();
+    });
+
+    it('ignores an expired reservation on a text start', async () => {
+      const key = 'user:user-id:namespace-id:conversation-id';
+      const raw = {
+        id: 'answer-1',
+        parentId: null,
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findAll: jest.fn().mockResolvedValue([raw]),
+        create: jest.fn(),
+      });
+      (service as any).pendingStreamReservations.set(key, {
+        token: 'expired-owner',
+        reservedAt: Date.now() - 120_000,
+      });
+
+      await expect(
+        (service as any).createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: 'text',
+            parent_message_id: 'answer-1',
+            tools: [],
+            channel: 'mobile',
+          },
+          'request-id',
+          'ask',
+          'user-id',
+        ),
+      ).resolves.toBeDefined();
+      expect((service as any).pendingStreamReservations.has(key)).toBe(false);
+    });
+
+    it('refuses a locked decision resume while a foreign reservation is pending', async () => {
+      const key = 'user:user-id:namespace-id:conversation-id';
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn();
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+      (service as any).pendingStreamReservations.set(key, {
+        token: 'foreign-owner',
+        reservedAt: Date.now(),
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({ code: 'conversation_busy' });
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('ignores an expired reservation on a locked decision resume', async () => {
+      const key = 'user:user-id:namespace-id:conversation-id';
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn().mockResolvedValue({
+        ...stored,
+        attrs: { ...stored.attrs, tool_call: { decisions: rejectDecisions } },
+      });
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+      (service as any).pendingStreamReservations.set(key, {
+        token: 'expired-owner',
+        reservedAt: Date.now() - 120_000,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+      expect(update).toHaveBeenCalledTimes(1);
+    });
+
+    it('releases the reservation when the stream cannot be created', async () => {
+      const stored = storedDecision(rejectDecisions);
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        findAll: jest.fn().mockRejectedValue(new Error('db down')),
+        update: jest.fn(),
+      });
+
+      await expect(
+        (service as any).createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: '',
+            parent_message_id: 'decision-d',
+            tools: [],
+            channel: 'mobile',
+            tool_call: { decisions: rejectDecisions },
+          },
+          'request-id',
+          'ask',
+          'user-id',
+        ),
+      ).rejects.toThrow('db down');
+      expect((service as any).pendingStreamReservations.size).toBe(0);
+    });
+
+    it('refuses a decision resume while the conversation is streaming under the lock', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn();
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+      (service as any).streamSessions.set(
+        'user:user-id:namespace-id:conversation-id',
+        { finished: false },
+      );
+
+      const error = await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({ code: 'conversation_busy' });
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('refuses a decided resume without a conversation lock and does not write', async () => {
+      const update = jest.fn();
+      const service = unlockedServiceWith({
+        findOneInConversation: jest
+          .fn()
+          .mockResolvedValue(storedDecision(rejectDecisions)),
+        findChildren: jest.fn().mockResolvedValue([toolResult]),
+        update,
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'interrupt_already_decided',
+        message_id: 'decision-d',
+      });
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('refuses a decided interrupt without a conversation lock and does not write', async () => {
+      const interrupt = {
+        id: 'interrupt-id',
+        conversationId: 'conversation-id',
+        message: { role: 'assistant' },
+        attrs: { tool_call: { interrupts: [{ id: 'call-1' }] } },
+      };
+      const update = jest.fn();
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(interrupt),
+        hasChildren: jest.fn().mockResolvedValue(true),
+        update,
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'interrupt-id',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'interrupt_already_decided',
+        message_id: 'interrupt-id',
+      });
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a decision whose parent cannot be loaded without a lock', async () => {
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(null),
+        update: jest.fn(),
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'missing',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(error).toMatchObject({ code: 'PARENT_CONVERSATION_MISMATCH' });
+      expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+    });
+
+    it('does not write a decision whose stored decisions match the request', async () => {
+      const stored = storedDecision(rejectDecisions);
+      const update = jest.fn();
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('overwrites an unapplied decision resolved as the latest message', async () => {
+      const stored = storedDecision([{ type: 'approve' }]);
+      const update = jest.fn(
+        (_id: string, _namespaceId: string, _conversationId: string, dto) =>
+          Promise.resolve({ ...stored, attrs: dto.attrs }),
+      );
+      const service = serviceWithMessages({
+        findLatest: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      await expect(
+        resolve(
+          service,
+          { tool_call: { decisions: [{ type: 'reject', end_turn: true }] } },
+          'latest',
+        ),
+      ).resolves.toBe('decision-d');
+
+      expect(update).toHaveBeenCalledWith(
+        'decision-d',
+        'namespace-id',
+        'conversation-id',
+        {
+          attrs: {
+            composer: { content: '' },
+            context: { edition: 'pro' },
+            tool_call: { decisions: [{ type: 'reject', end_turn: true }] },
+          },
+        },
+        false,
+      );
+    });
+
+    it('keeps the in-memory parent in sync with the saved attrs', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn(
+        (_id: string, _namespaceId: string, _conversationId: string, dto) =>
+          Promise.resolve({
+            ...stored,
+            attrs: { ...dto.attrs, saved_marker: true },
+          }),
+      );
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      });
+
+      expect(stored.attrs).toEqual({
+        composer: { content: '' },
+        context: { edition: 'pro' },
+        tool_call: { decisions: rejectDecisions },
+        saved_marker: true,
+      });
+    });
+
+    it('overwrites an unapplied decision in a share stream', async () => {
+      const stored = {
+        ...storedDecision([{ type: 'approve' }, { type: 'approve' }]),
+        parentId: null,
+      };
+      const update = jest.fn(
+        (_id: string, _namespaceId: string, _conversationId: string, dto) =>
+          Promise.resolve({ ...stored, attrs: dto.attrs }),
+      );
+      const messagesService = {
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        findAll: jest.fn().mockResolvedValue([stored]),
+        update,
+      };
+      const service = createService({ messagesService });
+      jest
+        .spyOn(service, 'acquireConversationLock')
+        .mockResolvedValue(jest.fn().mockResolvedValue(undefined));
+      jest
+        .spyOn(service as any, 'claimStreamActive')
+        .mockResolvedValue(undefined);
+
+      await service.createShareAgentStream(
+        {
+          id: 'share-id',
+          namespaceId: 'namespace-id',
+          shareType: ShareType.ALL,
+        } as any,
+        {
+          conversation_id: 'conversation-id',
+          parent_message_id: 'decision-d',
+          query: 'hello',
+          tools: [],
+          tool_call: { decisions: rejectDecisions },
+        } as any,
+        'request-id',
+        'ask',
+      );
+
+      expect(update).toHaveBeenCalledWith(
+        'decision-d',
+        'namespace-id',
+        'conversation-id',
+        {
+          attrs: {
+            composer: { content: '' },
+            context: { edition: 'pro' },
+            tool_call: { decisions: rejectDecisions },
+          },
+        },
+        false,
+      );
     });
   });
 
@@ -2325,6 +3694,7 @@ describe('persisted query receipts', () => {
     const create = jest.fn();
     (service as any).messagesService = {
       findAll: jest.fn().mockResolvedValue([query]),
+      findOneInConversation: jest.fn().mockResolvedValue(query),
       create,
     };
     jest.spyOn(service, 'stream').mockImplementation((_ns, _mode, body) => {
@@ -2403,6 +3773,8 @@ describe('persisted query receipts', () => {
     (service as any).messagesService = {
       create,
       findOne: jest.fn(),
+      findOneInConversation: jest.fn().mockResolvedValue(interrupt),
+      hasChildren: jest.fn().mockResolvedValue(false),
       findAll: jest.fn().mockResolvedValue([interrupt]),
     };
     jest.spyOn(service, 'stream').mockImplementation((_ns, _mode, body) => {
@@ -2438,6 +3810,7 @@ describe('persisted query receipts', () => {
       lang: '简体中文',
       channel: 'qq',
     });
+    expect((service as any).pendingStreamReservations.size).toBe(0);
   });
 });
 
@@ -2518,6 +3891,46 @@ describe('StreamService composer images', () => {
 });
 
 describe('StreamService cancellation extensions', () => {
+  it('stops the browser stream without aborting negotiated usage settlement', async () => {
+    const service = createService({}) as any;
+    const multi = {
+      hSet: jest.fn().mockReturnThis(),
+      hDel: jest.fn().mockReturnThis(),
+      publish: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([]),
+    };
+    service.redisClient = {
+      isOpen: true,
+      hGet: jest.fn().mockResolvedValue('submission-queue'),
+      multi: jest.fn().mockReturnValue(multi),
+    };
+    service.messagesService = { stopRunning: jest.fn() };
+    jest.spyOn(service, 'markSessionCanceled').mockResolvedValue(undefined);
+    jest.spyOn(service, 'sendSessionData').mockResolvedValue(undefined);
+    jest.spyOn(service, 'completeSession').mockImplementation(() => undefined);
+    const session = {
+      controller: new AbortController(),
+      steerToken: 'token',
+      steerStopSupported: true,
+      handlerContext: {},
+    };
+
+    await service.stopSession(session);
+
+    expect(multi.hSet).toHaveBeenCalledWith(
+      'wizard:steer:token',
+      'stopped',
+      '1',
+    );
+    expect(multi.publish).toHaveBeenCalledWith('submission-queue:wake', 'stop');
+    expect(session.controller.signal.aborted).toBe(false);
+    expect(service.sendSessionData).toHaveBeenCalledWith(
+      session,
+      JSON.stringify({ response_type: 'stopped' }),
+    );
+    expect(service.completeSession).toHaveBeenCalledWith(session);
+  });
+
   it.each(['local', 'remote'])(
     'awaits deployment cancellation for a %s stream',
     async (location) => {
@@ -2633,6 +4046,92 @@ describe('StreamService failed streams', () => {
   });
 });
 
+it('returns a stopped Bot Open API reply when Web cancels the same conversation', async () => {
+  const rows = {
+    user: { id: 'query', role: OpenAIMessageRole.USER, content: 'hello' },
+    assistant: {
+      id: 'answer',
+      role: OpenAIMessageRole.ASSISTANT,
+      content: 'Partial',
+    },
+  };
+  const conversation = { id: 'conv' };
+  const messages = {
+    create: jest.fn().mockImplementation((_ns, _conv, _user, input) => ({
+      id: rows[input.message.role as keyof typeof rows].id,
+      message: input.message,
+      createdAt: new Date(),
+    })),
+    findOne: jest.fn().mockResolvedValue({ attrs: {} }),
+    updateDelta: jest.fn().mockResolvedValue({ message: rows.assistant }),
+    stopRunning: jest.fn().mockResolvedValue(undefined),
+  };
+  const conversations = {
+    findOneForUserInNamespace: jest.fn().mockResolvedValue(conversation),
+  };
+  const service = createService({
+    messagesService: messages,
+    conversationsService: conversations,
+  });
+  jest
+    .spyOn(service as any, 'resolveStreamParent')
+    .mockResolvedValue(undefined);
+  let markPartialSent!: () => void;
+  const partialSent = new Promise<void>((resolve) => {
+    markPartialSent = resolve;
+  });
+  jest
+    .spyOn(service, 'stream')
+    .mockImplementation(async (_ns, _mode, _body, _req, emit, signal) => {
+      await emit(JSON.stringify({ response_type: 'bos', role: 'assistant' }));
+      await emit(
+        JSON.stringify({
+          response_type: 'delta',
+          message: { content: 'Partial' },
+        }),
+      );
+      await new Promise<void>((resolve) => {
+        signal!.addEventListener('abort', () => resolve(), { once: true });
+        markPartialSent();
+      });
+    });
+  const openService = new OpenWizardService(
+    {} as any,
+    service,
+    messages as any,
+    conversations as any,
+    { t: jest.fn() } as any,
+  );
+  const bot = new OpenWizardController({} as any, openService, {} as any);
+  const web = new WizardController({} as any, service, {} as any);
+
+  const reply = bot.ask({ namespaceId: 'ns' } as any, 'user', 'run', {
+    conversation_id: conversation.id,
+    source_channel: 'qq',
+    query: 'hello',
+    tools: [],
+  });
+  await partialSent;
+  await expect(web.cancel('user', 'ns', conversation.id)).resolves.toEqual({
+    success: true,
+  });
+  await expect(reply).resolves.toMatchObject({
+    conversation_id: conversation.id,
+    status: 'stopped',
+    messages: [
+      { id: 'query', role: 'user' },
+      { id: 'answer', role: 'assistant', message: { content: 'Partial' } },
+    ],
+  });
+  expect(messages.stopRunning).toHaveBeenCalledWith(
+    'ns',
+    'conv',
+    'user',
+    'answer',
+    { id: 'run', queryId: 'query' },
+  );
+});
+
 describe('StreamService.chat() never receives the SSE heartbeat', () => {
   const saved = {
     id: 'query-id',
@@ -2702,6 +4201,97 @@ describe('StreamService agent handler error finalization', () => {
     );
     return { handler, messagesService, send };
   }
+
+  it.each(['next reply', 'stop'])(
+    'bills interrupted usage on the original reply once after %s',
+    async (transition) => {
+      const service = createService({}) as any;
+      const oldRow = {
+        id: 'old-reply',
+        inputTokenCached: 80,
+        inputTokenUncached: 20,
+        outputToken: 30,
+      };
+      const settle = jest.fn().mockResolvedValue(oldRow);
+      service.messagesService = { settleInterruptedUsage: settle };
+      const charge = jest.fn().mockResolvedValue(undefined);
+      service.agentStreamHooks.onCallCompleted = charge;
+      const send = jest.fn();
+      const stream = { streamId: 'run' };
+      const handler = service.agentHandler(
+        'namespace',
+        'conversation',
+        'user',
+        send,
+        false,
+        stream,
+      );
+      const context = {
+        messageId: 'old-reply',
+        message: { role: OpenAIMessageRole.ASSISTANT },
+        stopped: false,
+      };
+      const pending = {
+        response_type: 'delta',
+        message: {},
+        attrs: { context: { pending_usage_call_id: 'interrupted' } },
+      };
+      const settled = {
+        response_type: 'delta',
+        message: {},
+        attrs: {
+          context: { settled_usage_call_id: 'interrupted' },
+          usage: {
+            prompt_tokens: 100,
+            completion_tokens: 30,
+            prompt_tokens_details: { cached_tokens: 80 },
+          },
+        },
+      };
+      if (transition === 'stop') context.stopped = true;
+      await handler(JSON.stringify(pending), context);
+      if (transition === 'stop') {
+        await handler(
+          JSON.stringify({ response_type: 'bos', role: 'assistant' }),
+          context,
+        );
+        await handler(
+          JSON.stringify({
+            ...pending,
+            attrs: { context: { pending_usage_call_id: 'untracked' } },
+          }),
+          context,
+        );
+        await handler(
+          JSON.stringify({
+            ...settled,
+            attrs: {
+              ...settled.attrs,
+              context: { settled_usage_call_id: 'untracked' },
+            },
+          }),
+          context,
+        );
+      } else {
+        context.messageId = 'new-reply';
+      }
+      await handler(JSON.stringify(settled), context);
+      await handler(JSON.stringify(settled), context);
+      expect(settle).toHaveBeenCalledTimes(1);
+      expect(settle).toHaveBeenCalledWith('old-reply', settled.attrs.usage);
+      expect(charge).toHaveBeenCalledTimes(1);
+      expect(charge).toHaveBeenCalledWith(
+        context.stopped ? { ...stream, settledAfterStop: true } : stream,
+        'old-reply',
+        {
+          inputTokenCached: 80,
+          inputTokenUncached: 20,
+          outputToken: 30,
+        },
+      );
+      expect(send).not.toHaveBeenCalled();
+    },
+  );
 
   it('marks an open tool message as a failed tool call', async () => {
     const { handler, messagesService, send } = handlerWithMessages();
@@ -3591,5 +5181,2550 @@ describe('StreamService first content token trace', () => {
     await emitAt(1300, { response_type: 'done' });
 
     expect(events()).toHaveLength(0);
+  });
+});
+
+describe('server-owned conversation delivery', () => {
+  const service = createService({});
+  it('replays a finished session to a late subscriber', () => {
+    const subscriber = { next: jest.fn(), complete: jest.fn() };
+    (service as any).attachSession(
+      { finished: true, events: ['saved', 'done'] },
+      subscriber,
+    );
+    expect(subscriber.next.mock.calls).toEqual([
+      [{ data: 'saved' }],
+      [{ data: 'done' }],
+    ]);
+    expect(subscriber.complete).toHaveBeenCalledTimes(1);
+  });
+  it('keeps a running session when the last reader closes', () => {
+    const session = {
+      finished: false,
+      events: [],
+      subscribers: new Set(),
+      controller: new AbortController(),
+    };
+    const detach = (service as any).attachSession(session, { next: jest.fn() });
+    detach();
+    expect(session.subscribers.size).toBe(0);
+    expect(session.controller.signal.aborted).toBe(false);
+  });
+});
+
+describe('conversation submission admission', () => {
+  const requestId = '14edee90-e083-48c6-ab81-ceb94c77ae03';
+  const job = {
+    userId: 'u',
+    namespaceId: 'n',
+    conversationId: 'c',
+    body: {
+      query: 'Continue',
+      tools: [],
+      client_request_id: requestId,
+    },
+  };
+  const request = {
+    ...job.body,
+    conversation_id: 'c',
+    channel: AgentRequestChannel.OPEN_API,
+  };
+  const fingerprint = submissionFingerprint({
+    client_request_id: requestId,
+    query: request.query,
+    images: [],
+    tools: [],
+    conversation_id: 'c',
+    channel: request.channel,
+  });
+
+  function expiredReceipt(existing: Record<string, unknown>) {
+    const findSubmitted = jest.fn().mockResolvedValue(existing);
+    const service = createService({
+      conversationsService: { findOneForUserInNamespace: jest.fn() },
+      messagesService: { findSubmitted },
+    });
+    const redis = {
+      eval: jest.fn((_script, { arguments: args }) =>
+        args[7] === 'false' ? null : args[7],
+      ),
+    };
+    jest
+      .spyOn(service as any, 'submissionQueue')
+      .mockResolvedValue(
+        new ConversationSubmissions(redis as any, 'submissions'),
+      );
+    return {
+      service,
+      findSubmitted,
+      process: jest.spyOn(service as any, 'processSubmission'),
+      redis,
+    };
+  }
+
+  it.each([undefined, 'earlier-run'])(
+    'replays a persisted request after its receipt expires (run %s)',
+    async (originalRun) => {
+      const { service, findSubmitted, process, redis } = expiredReceipt({
+        id: 'stored-message',
+        status: MessageStatus.SUCCESS,
+        message: { content: job.body.query },
+        attrs: {
+          turn_run_id: originalRun,
+          submission_fingerprint: fingerprint,
+        },
+      });
+      await expect(
+        service.submitConversationMessage('n', 'c', 'u', request),
+      ).resolves.toEqual({
+        id: 'stored-message',
+        run_id: originalRun ?? requestId,
+        client_request_id: requestId,
+        disposition: originalRun ? 'steered' : 'started',
+      });
+      expect(findSubmitted).toHaveBeenCalledWith('u', 'c', requestId);
+      expect(redis.eval).toHaveBeenCalledTimes(1);
+      expect(process).not.toHaveBeenCalled();
+    },
+  );
+
+  it('never queues a stopped steer after its receipt expires, even without a persisted delta', async () => {
+    const { service, process } = expiredReceipt({
+      id: 'stopped-message',
+      status: MessageStatus.STOPPED,
+      message: { role: 'user' },
+      attrs: {
+        turn_run_id: 'stopped-run',
+        submission_fingerprint: fingerprint,
+      },
+    });
+    await expect(
+      service.submitConversationMessage('n', 'c', 'u', request),
+    ).resolves.toEqual({
+      id: 'stopped-message',
+      run_id: 'stopped-run',
+      client_request_id: requestId,
+      disposition: 'failed',
+      error: 'Message was stopped',
+    });
+    expect(process).not.toHaveBeenCalled();
+  });
+
+  it('serializes the behavior context and client platform into the queued job', async () => {
+    const behavior = {
+      action_id: '11111111-1111-4111-8111-111111111111',
+      action_type: 'ai_conversation',
+      action_started_at: new Date().toISOString(),
+      origin_platform: 'ios',
+      user_id: 'u',
+      task_ids: [],
+    };
+    const service = createService({
+      conversationsService: { findOneForUserInNamespace: jest.fn() },
+      messagesService: {
+        findSubmitted: jest.fn().mockResolvedValue(undefined),
+      },
+    });
+    const add = jest.fn(() =>
+      Promise.resolve({
+        disposition: 'queued',
+        client_request_id: requestId,
+        query: request.query,
+      }),
+    );
+    jest
+      .spyOn(service as any, 'submissionQueue')
+      .mockResolvedValue({ key: () => 'scope', add });
+    const process = jest
+      .spyOn(service as any, 'processSubmission')
+      .mockImplementation(() => undefined);
+    await behaviorContext.run(behavior, () =>
+      service.submitConversationMessage(
+        'n',
+        'c',
+        'u',
+        { ...request, approval_mode: 'auto_approve' },
+        undefined,
+        false,
+        'ios',
+      ),
+    );
+    expect(process).toHaveBeenCalled();
+    const [key, job, payload] = add.mock.calls[0] as unknown as [
+      string,
+      ConversationSubmission,
+      string,
+    ];
+    expect(key).toBe('scope');
+    expect(job.behavior).toEqual(behavior);
+    expect(job.platform).toBe('ios');
+    expect(job.body.approval_mode).toBe('auto_approve');
+    const parsed = JSON.parse(payload) as Record<string, unknown>;
+    expect(parsed.behavior).toEqual(behavior);
+    expect(typeof parsed.submission_fingerprint).toBe('string');
+  });
+
+  it('rejects changed tools under the same ID and text after the receipt expires', async () => {
+    const { service, process } = expiredReceipt({
+      id: 'stored-message',
+      status: MessageStatus.SUCCESS,
+      message: { role: 'user', content: request.query },
+      attrs: { submission_fingerprint: fingerprint },
+    });
+    await expect(
+      service.submitConversationMessage('n', 'c', 'u', {
+        ...request,
+        tools: [{ name: 'web_search' }],
+      }),
+    ).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+    expect(process).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['the current BOS frame', fingerprint, 'error', fingerprint],
+    ['a legacy BOS frame', undefined, 'ready', fingerprint],
+    [
+      'a legacy BOS frame during a Redis interruption',
+      undefined,
+      'error',
+      undefined,
+    ],
+    ['a legacy BOS frame with no Redis reply', undefined, 'timeout', undefined],
+  ])(
+    'persists Steer BOS from %s',
+    async (_case, digest, redisState, expected) => {
+      const create = jest.fn().mockResolvedValue({
+        id: 'steered-message',
+        createdAt: new Date(),
+        message: { role: 'user' },
+      });
+      const service = createService({
+        messagesService: { create, findOne: jest.fn().mockResolvedValue({}) },
+      });
+      const evalCommand = jest
+        .fn()
+        .mockResolvedValue(
+          JSON.stringify({ submission_fingerprint: fingerprint }),
+        );
+      if (redisState === 'error') {
+        evalCommand.mockRejectedValue(new Error('Redis reconnecting'));
+      }
+      if (redisState === 'timeout') {
+        evalCommand.mockImplementation(
+          ({ signal }: { signal: AbortSignal }) =>
+            // The caller must continue after its own deadline even if Redis never responds.
+            new Promise(() => expect(signal).toBeDefined()),
+        );
+      }
+      (service as any).redisClient = { eval: evalCommand };
+      (service as any).streamSessions.set('active-stream', {
+        steerToken: 'active-token',
+      });
+      await service.agentHandler('n', 'c', 'u', jest.fn(), false, {
+        streamId: 'active-stream',
+      } as AgentStream)(
+        JSON.stringify({
+          response_type: 'bos',
+          role: 'user',
+          attrs: {
+            composer: {
+              client_request_id: requestId,
+              submission_fingerprint: digest,
+            },
+          },
+        }),
+        { canSteer: true, queryId: 'initial-message', runId: 'active-run' },
+      );
+      // The inbox is read for every steered row to attribute its behavior.
+      expect(evalCommand).toHaveBeenCalledTimes(1);
+      expect(create.mock.calls[0][3].attrs).toMatchObject({
+        client_request_id: requestId,
+        composer: { client_request_id: requestId },
+        turn_run_id: 'active-run',
+      });
+      expect(create.mock.calls[0][3].attrs.submission_fingerprint).toBe(
+        expected,
+      );
+      expect(create.mock.calls[0][3].attrs.composer).not.toHaveProperty(
+        'submission_fingerprint',
+      );
+    },
+  );
+  function setup(active: boolean, target?: string) {
+    const service = createService({
+      conversationsService: { findOneForUserInNamespace: jest.fn() },
+      messagesService: { findSubmitted: jest.fn() },
+    });
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue({
+      get: jest.fn().mockResolvedValue(target),
+      exists: jest.fn().mockResolvedValue(active ? 1 : 0),
+      eval: jest.fn().mockResolvedValue(0),
+    });
+    const start = jest
+      .spyOn(service as any, 'openUserAgentStream')
+      .mockResolvedValue(
+        new Observable((subscriber) => {
+          subscriber.next({
+            data: JSON.stringify({
+              response_type: 'bos',
+              role: 'user',
+              id: 'persisted',
+              attrs: { client_request_id: requestId },
+            }),
+          });
+        }),
+      );
+    const steer = jest.spyOn(service, 'submitSteer');
+    return {
+      deliver: (input: typeof job = job) =>
+        (service as any).deliverConversationMessage(input),
+      start,
+      steer,
+    };
+  }
+  it('rejects an approval raised after enqueue and delivers the original message on retry', async () => {
+    const service = createService({
+      conversationsService: { findOneForUserInNamespace: jest.fn() },
+      messagesService: {
+        findSubmitted: jest.fn(),
+        findOneInConversation: jest
+          .fn()
+          .mockResolvedValueOnce({ attrs: { turn_id: 'original' } })
+          .mockResolvedValueOnce({ attrs: { edition: 'pro', level: 'low' } }),
+      },
+    });
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue({
+      get: jest.fn(),
+      exists: jest.fn(),
+      eval: jest.fn(),
+    });
+    const start = jest
+      .spyOn(service as any, 'openUserAgentStream')
+      .mockRejectedValueOnce(
+        new AppException('Approval pending', 'PENDING_INTERRUPT', 409, {
+          message_id: 'approval',
+          interrupt_count: 2,
+        }),
+      )
+      .mockResolvedValueOnce(
+        of({ data: JSON.stringify({ response_type: 'done' }) }),
+      )
+      .mockResolvedValueOnce(
+        of({
+          data: JSON.stringify({
+            response_type: 'bos',
+            role: 'user',
+            id: 'persisted',
+            attrs: { client_request_id: requestId },
+          }),
+        }),
+      );
+    const queue = {
+      process: jest.fn((_key, deliver) =>
+        deliver({ ...job, checkpointDelivery: true }),
+      ),
+    };
+    await (service as any).processSubmission(queue, 'scope');
+    await expect(queue.process.mock.results[0].value).resolves.toBeUndefined();
+    expect(start.mock.calls[1][2]).toEqual(
+      expect.objectContaining({
+        parent_message_id: 'approval',
+        edition: 'pro',
+        level: 'low',
+        tool_call: {
+          decisions: Array.from({ length: 2 }, () =>
+            expect.objectContaining({ type: 'reject', end_turn: true }),
+          ),
+        },
+      }),
+    );
+    expect(start.mock.calls[1][3]).not.toBe(requestId);
+    await (service as any).processSubmission(queue, 'scope');
+    await expect(queue.process.mock.results[1].value).resolves.toMatchObject({
+      disposition: 'started',
+      client_request_id: requestId,
+    });
+  });
+
+  it.each(['reject', 'approve'])(
+    'only resumes a rejected end-turn decision after an interrupted resume (%s)',
+    async (type) => {
+      const decisions = [{ type, end_turn: true }];
+      const service = createService({
+        messagesService: {
+          findOneInConversation: jest.fn().mockResolvedValue({
+            attrs: { tool_call: { decisions }, edition: 'pro' },
+          }),
+        },
+      });
+      const start = jest
+        .spyOn(service as any, 'openUserAgentStream')
+        .mockResolvedValue(of({ data: '{"response_type":"done"}' }));
+      await (service as any).rejectQueuedApproval(
+        job,
+        new AppException('Decision not applied', 'DECISION_NOT_APPLIED', 409, {
+          message_id: 'decision',
+          interrupt_count: 1,
+        }),
+      );
+      if (type === 'reject') {
+        expect(start.mock.calls[0][2]).toMatchObject({
+          parent_message_id: 'decision',
+          tool_call: { decisions },
+        });
+      } else {
+        expect(start).not.toHaveBeenCalled();
+      }
+    },
+  );
+  it('leaves early input queued while a running turn negotiates steer', async () => {
+    const { deliver, start } = setup(true);
+    await expect(deliver()).resolves.toBeUndefined();
+    expect(start).not.toHaveBeenCalled();
+  });
+  it('starts a detached turn with the same request id after definite closure', async () => {
+    const { deliver, steer } = setup(false, 'old');
+    steer.mockRejectedValue(new AppException('closed', 'STEER_CLOSED', 409));
+    await expect(deliver()).resolves.toMatchObject({
+      disposition: 'started',
+      id: 'persisted',
+      run_id: requestId,
+    });
+  });
+  it('does not create a second turn on an ambiguous delivery error', async () => {
+    const { deliver, steer, start } = setup(false, 'old');
+    steer.mockRejectedValue(new Error('network'));
+    await expect(deliver()).rejects.toThrow('network');
+    expect(start).not.toHaveBeenCalled();
+  });
+});
+
+describe('paused resume behavior collection', () => {
+  const row = (
+    id: string,
+    role: OpenAIMessageRole,
+    attrs: Record<string, unknown>,
+  ) => ({ id, message: { role }, attrs }) as any;
+  it('collects every paused initiating action across chained pauses', () => {
+    const rows = [
+      row('pause-1', OpenAIMessageRole.ASSISTANT, {
+        behavior_action_id: 'action-a',
+        turn_run_id: 'run-1',
+        answer_timing: { status: 'paused' },
+      }),
+      row('decision-1', OpenAIMessageRole.USER, {
+        turn_run_id: undefined,
+      }),
+      row('pause-2', OpenAIMessageRole.ASSISTANT, {
+        behavior_action_id: 'action-d1',
+        turn_run_id: 'run-2',
+        answer_timing: { status: 'paused' },
+      }),
+      row('steered-pause', OpenAIMessageRole.ASSISTANT, {
+        behavior_action_id: 'steered-action',
+        turn_run_id: 'run-2',
+        answer_timing: { status: 'paused' },
+      }),
+      row('steered-user', OpenAIMessageRole.USER, {
+        behavior_action_id: 'steered-action',
+        client_request_id: 'steer-request',
+        turn_run_id: 'run-2',
+      }),
+      row('completed', OpenAIMessageRole.ASSISTANT, {
+        behavior_action_id: 'completed-action',
+        turn_run_id: 'run-2',
+        answer_timing: { status: 'complete' },
+      }),
+      row('current', OpenAIMessageRole.ASSISTANT, {
+        behavior_action_id: 'current-action',
+        turn_run_id: 'run-2',
+        answer_timing: { status: 'paused' },
+      }),
+    ];
+    expect(
+      collectPausedResumeBehaviors(rows, 'user', 'current-action').map(
+        (behavior) => behavior.action_id,
+      ),
+    ).toEqual(['action-a', 'action-d1']);
+  });
+
+  it('collects a pause under a decision user row that has no turn_run_id', () => {
+    const rows = [
+      row('pause', OpenAIMessageRole.ASSISTANT, {
+        behavior_action_id: 'action',
+        turn_run_id: 'run',
+        answer_timing: { status: 'paused' },
+      }),
+      row('decision', OpenAIMessageRole.USER, {}),
+    ];
+    expect(
+      collectPausedResumeBehaviors(rows, 'user').map(
+        (behavior) => behavior.action_id,
+      ),
+    ).toEqual(['action']);
+  });
+});
+
+describe('queue behavior attribution', () => {
+  const runBehavior = {
+    action_id: '11111111-1111-4111-8111-111111111111',
+    action_type: 'ai_conversation',
+    action_started_at: new Date().toISOString(),
+    origin_platform: 'ios',
+    user_id: 'u',
+    task_ids: [],
+  };
+  const steeredBehavior = {
+    action_id: '22222222-2222-4222-8222-222222222222',
+    action_type: 'ai_conversation',
+    action_started_at: new Date().toISOString(),
+    origin_platform: 'ios',
+    user_id: 'u',
+    task_ids: [],
+  };
+  const secondSteeredBehavior = {
+    ...steeredBehavior,
+    action_id: '33333333-3333-4333-8333-333333333333',
+  };
+  const requestId = '14edee90-e083-48c6-ab81-ceb94c77ae03';
+  const secondRequestId = '24edee90-e083-48c6-ab81-ceb94c77ae04';
+  const job = {
+    userId: 'u',
+    namespaceId: 'n',
+    conversationId: 'c',
+    behavior: runBehavior,
+    platform: 'ios',
+    body: {
+      query: 'Continue',
+      tools: [],
+      client_request_id: requestId,
+    },
+  };
+  function answerTiming() {
+    return {
+      value: {
+        version: 1 as const,
+        answer_id: 'answer',
+        run_id: 'run',
+        status: 'running' as const,
+        started_at: new Date().toISOString(),
+      },
+      previousDurationMs: 0,
+      startedAtMonotonic: performance.now(),
+    };
+  }
+  function handlerService() {
+    let created = 0;
+    const create = jest.fn(
+      (
+        _namespaceId: string,
+        _conversationId: string,
+        _userId: string,
+        input: any,
+      ) =>
+        Promise.resolve({
+          id: `${input.message.role}-${++created}`,
+          parentId: input.parentId,
+          createdAt: new Date(),
+          message: { role: input.message.role },
+        }),
+    );
+    const update = jest.fn((id: string): any =>
+      Promise.resolve({
+        id,
+        message: { role: 'assistant', content: 'answer' },
+        attrs: {},
+      }),
+    );
+    const updateDelta = jest.fn((id: string) =>
+      Promise.resolve({
+        id,
+        message: { role: 'assistant' },
+        attrs: {},
+      }),
+    );
+    const setAnswerTiming = jest.fn((id: string, timing: unknown) =>
+      Promise.resolve({
+        id,
+        message: { role: 'assistant' },
+        attrs: { answer_timing: timing },
+      }),
+    );
+    const finalizeAnswerTiming = jest.fn((id: string, timing: unknown) =>
+      Promise.resolve({
+        id,
+        message: { role: 'assistant' },
+        attrs: { answer_timing: timing },
+      }),
+    );
+    const behaviorService = {
+      result: jest.fn((...args: unknown[]) => {
+        void args;
+        return Promise.resolve(undefined);
+      }),
+    };
+    const service = createService({
+      messagesService: {
+        create,
+        update,
+        updateDelta,
+        setAnswerTiming,
+        finalizeAnswerTiming,
+        findOne: jest.fn().mockResolvedValue({}),
+        indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
+      },
+      behaviorService,
+    });
+    (service as any).streamSessions.set('active-stream', {
+      steerToken: 'active-token',
+    });
+    (service as any).redisClient = {
+      eval: jest.fn((_options, _script, params) => {
+        const id = params.arguments[0];
+        return JSON.stringify({
+          submission_fingerprint: 'fingerprint',
+          behavior:
+            id === secondRequestId ? secondSteeredBehavior : steeredBehavior,
+        });
+      }),
+      hSet: jest.fn(),
+    };
+    return {
+      service,
+      create,
+      update,
+      updateDelta,
+      setAnswerTiming,
+      finalizeAnswerTiming,
+      behaviorService,
+    };
+  }
+  function handlerOf(service: StreamService) {
+    return behaviorContext.run(runBehavior, () =>
+      service.agentHandler('n', 'c', 'u', jest.fn(), false, {
+        streamId: 'active-stream',
+      } as AgentStream),
+    );
+  }
+  async function steer(
+    handler: (data: string, context: any) => Promise<void>,
+    context: Record<string, unknown>,
+    id: string,
+    answer = 'answer',
+  ) {
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.USER,
+        attrs: { composer: { client_request_id: id } },
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'delta',
+        message: { content: answer },
+      }),
+      context,
+    );
+    await handler(JSON.stringify({ response_type: 'eos' }), context);
+  }
+  it('re-enters the queued behavior context for deferred delivery', async () => {
+    const service = createService({});
+    const seen: unknown[] = [];
+    jest
+      .spyOn(service as any, 'deliverConversationMessage')
+      .mockImplementation(() => {
+        seen.push(behaviorContext.getStore());
+        return Promise.resolve({
+          disposition: 'started',
+          client_request_id: requestId,
+        });
+      });
+    const queue = {
+      process: jest.fn((_key: string, deliver: (input: unknown) => unknown) =>
+        deliver(job),
+      ),
+    };
+    await (service as any).processSubmission(queue, 'scope');
+    expect(seen).toEqual([runBehavior]);
+    await (service as any).processSubmission(
+      {
+        process: jest.fn((_key: string, deliver) =>
+          deliver({ ...job, behavior: undefined }),
+        ),
+      },
+      'scope',
+    );
+    expect(seen).toEqual([runBehavior, undefined]);
+  });
+  it('stamps the queue-started assistant row and completes the run behavior', async () => {
+    const { service, create, behaviorService } = handlerService();
+    const context: Record<string, unknown> = {
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    const handler = handlerOf(service);
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'delta',
+        message: { content: 'answer' },
+      }),
+      context,
+    );
+    await handler(JSON.stringify({ response_type: 'eos' }), context);
+    await handler(JSON.stringify({ response_type: 'done' }), context);
+    expect(create.mock.calls[0][3].attrs.behavior_action_id).toBe(
+      runBehavior.action_id,
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(runBehavior, 'success');
+  });
+  it('attributes a steered deferred delivery to the steered action', async () => {
+    const { service, create, finalizeAnswerTiming, behaviorService } =
+      handlerService();
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    const handler = handlerOf(service);
+    await steer(handler, context, requestId);
+    await handler(JSON.stringify({ response_type: 'done' }), context);
+    const rows = create.mock.calls.map((call) => call[3].attrs);
+    expect(rows[0].behavior_action_id).toBe(steeredBehavior.action_id);
+    expect(rows[1].behavior_action_id).toBe(steeredBehavior.action_id);
+    expect(rows[0].client_request_id).toBe(requestId);
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+      'assistant-2',
+      expect.objectContaining({ status: 'complete' }),
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      steeredBehavior,
+      'success',
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(runBehavior, 'success');
+  });
+  it('completes both steered actions in a two-steer run', async () => {
+    const { service, create, finalizeAnswerTiming, behaviorService } =
+      handlerService();
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    const handler = handlerOf(service);
+    await steer(handler, context, requestId);
+    await steer(handler, context, secondRequestId);
+    await handler(JSON.stringify({ response_type: 'done' }), context);
+    const rows = create.mock.calls.map((call) => call[3].attrs);
+    expect(rows.map((attrs) => attrs.behavior_action_id)).toEqual([
+      steeredBehavior.action_id,
+      steeredBehavior.action_id,
+      secondSteeredBehavior.action_id,
+      secondSteeredBehavior.action_id,
+    ]);
+    expect(
+      finalizeAnswerTiming.mock.calls.slice(0, 2).map((call) => call[0]),
+    ).toEqual(['assistant-2', 'assistant-4']);
+    expect(
+      finalizeAnswerTiming.mock.calls
+        .slice(0, 2)
+        .map((call) => (call[1] as { status: string }).status),
+    ).toEqual(['complete', 'complete']);
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      steeredBehavior,
+      'success',
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      secondSteeredBehavior,
+      'success',
+    );
+  });
+  it('attributes two direct steers delivered in one batch to their own turns', async () => {
+    const { service, create, finalizeAnswerTiming, behaviorService } =
+      handlerService();
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    const handler = handlerOf(service);
+    for (const id of [requestId, secondRequestId]) {
+      await handler(
+        JSON.stringify({
+          response_type: 'bos',
+          role: OpenAIMessageRole.USER,
+          attrs: { composer: { client_request_id: id } },
+        }),
+        context,
+      );
+    }
+    for (const answer of ['first answer', 'second answer']) {
+      await handler(
+        JSON.stringify({
+          response_type: 'bos',
+          role: OpenAIMessageRole.ASSISTANT,
+        }),
+        context,
+      );
+      await handler(
+        JSON.stringify({
+          response_type: 'delta',
+          message: { content: answer },
+        }),
+        context,
+      );
+      await handler(JSON.stringify({ response_type: 'eos' }), context);
+    }
+    await handler(JSON.stringify({ response_type: 'done' }), context);
+
+    const rows = create.mock.calls.map((call) => call[3].attrs);
+    expect(rows.map((attrs) => attrs.behavior_action_id)).toEqual([
+      steeredBehavior.action_id,
+      secondSteeredBehavior.action_id,
+      steeredBehavior.action_id,
+      secondSteeredBehavior.action_id,
+    ]);
+    expect(
+      finalizeAnswerTiming.mock.calls.map((call) => call[0]).slice(0, 2),
+    ).toEqual(['assistant-3', 'assistant-4']);
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      steeredBehavior,
+      'success',
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      secondSteeredBehavior,
+      'success',
+    );
+  });
+  it('closes an interrupted steer before attributing the next steer', async () => {
+    const { service, create, finalizeAnswerTiming, behaviorService } =
+      handlerService();
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    const handler = handlerOf(service);
+    // steer1's model call is armed but has produced no content when steer2
+    // arrives.
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.USER,
+        attrs: { composer: { client_request_id: requestId } },
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.USER,
+        attrs: { composer: { client_request_id: secondRequestId } },
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({ response_type: 'delta', message: { content: '火星' } }),
+      context,
+    );
+    await handler(JSON.stringify({ response_type: 'eos' }), context);
+    await handler(JSON.stringify({ response_type: 'done' }), context);
+
+    const rows = create.mock.calls.map((call) => call[3].attrs);
+    expect(rows.map((attrs) => attrs.behavior_action_id)).toEqual([
+      steeredBehavior.action_id,
+      steeredBehavior.action_id,
+      secondSteeredBehavior.action_id,
+      secondSteeredBehavior.action_id,
+    ]);
+    // The interrupted empty turn is finalized on its own row; the second
+    // steer's answer row is finalized when it closes.
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+      'assistant-2',
+      expect.objectContaining({ status: 'complete' }),
+    );
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+      'assistant-4',
+      expect.objectContaining({ status: 'complete' }),
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      steeredBehavior,
+      'success',
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      secondSteeredBehavior,
+      'success',
+    );
+  });
+  it('fails a tool-call steered turn when the run errors', async () => {
+    const {
+      service,
+      update,
+      setAnswerTiming,
+      finalizeAnswerTiming,
+      behaviorService,
+    } = handlerService();
+    update.mockResolvedValueOnce({
+      id: 'assistant-2',
+      message: {
+        role: 'assistant',
+        content: 'partial',
+        tool_calls: [{ id: 'tool' }],
+      },
+      attrs: {},
+    } as any);
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    const handler = handlerOf(service);
+    await steer(handler, context, requestId);
+    await handler(
+      JSON.stringify({ response_type: 'error', message: 'boom' }),
+      context,
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      steeredBehavior,
+      'failed',
+    );
+    expect(behaviorService.result).not.toHaveBeenCalledWith(
+      steeredBehavior,
+      'success',
+    );
+    // The closed SUCCESS row takes the failed timing through the closed-row
+    // finalizer, not setAnswerTiming (which requires a FAILED row).
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+      'assistant-2',
+      expect.objectContaining({ status: 'failed' }),
+    );
+    expect(setAnswerTiming).not.toHaveBeenCalledWith(
+      'assistant-2',
+      expect.objectContaining({ status: 'failed' }),
+    );
+  });
+  it('finalizes the initial turn row at the run outcome after an eos-first steer', async () => {
+    const { service, create, update, finalizeAnswerTiming, behaviorService } =
+      handlerService();
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    const handler = handlerOf(service);
+    // The armed initial turn's assistant row is closed by its eos BEFORE the
+    // steer user row arrives; the timer must remember that closed row.
+    update.mockResolvedValueOnce({
+      id: 'assistant-1',
+      message: { role: 'assistant', content: '' },
+      attrs: { behavior_action_id: runBehavior.action_id },
+    } as any);
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(JSON.stringify({ response_type: 'eos' }), context);
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.USER,
+        attrs: { composer: { client_request_id: requestId } },
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({ response_type: 'delta', message: { content: '地球' } }),
+      context,
+    );
+    await handler(JSON.stringify({ response_type: 'eos' }), context);
+    // The steered eos finalized its own row; the initial row still waits.
+    expect(finalizeAnswerTiming).not.toHaveBeenCalledWith(
+      'assistant-1',
+      expect.anything(),
+    );
+    await handler(JSON.stringify({ response_type: 'done' }), context);
+
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({ status: 'complete' }),
+    );
+    expect(
+      create.mock.calls.map((call) => call[3].attrs.behavior_action_id),
+    ).toEqual([
+      runBehavior.action_id,
+      steeredBehavior.action_id,
+      steeredBehavior.action_id,
+    ]);
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+      'assistant-3',
+      expect.objectContaining({ status: 'complete' }),
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      steeredBehavior,
+      'success',
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(runBehavior, 'success');
+  });
+  it('finalizes the initial turn row as failed when the run errors after a steer', async () => {
+    const { service, update, finalizeAnswerTiming, behaviorService } =
+      handlerService();
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    const handler = handlerOf(service);
+    update.mockResolvedValueOnce({
+      id: 'assistant-1',
+      message: { role: 'assistant', content: '' },
+      attrs: { behavior_action_id: runBehavior.action_id },
+    } as any);
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(JSON.stringify({ response_type: 'eos' }), context);
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.USER,
+        attrs: { composer: { client_request_id: requestId } },
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({ response_type: 'error', message: 'boom' }),
+      context,
+    );
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({ status: 'failed' }),
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(runBehavior, 'failed');
+  });
+  it('finalizes the initial turn row before the stop stamps stopped_runs', async () => {
+    const { service, update, finalizeAnswerTiming } = handlerService();
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    const handler = handlerOf(service);
+    update.mockResolvedValueOnce({
+      id: 'assistant-1',
+      message: { role: 'assistant', content: '' },
+      attrs: { behavior_action_id: runBehavior.action_id },
+    } as any);
+    // Real order: the initial assistant row is eos-closed, then the steer
+    // user frame arrives, then the save-driven stop.
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(JSON.stringify({ response_type: 'eos' }), context);
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.USER,
+        attrs: { composer: { client_request_id: requestId } },
+      }),
+      context,
+    );
+    const stopRunning = jest.fn().mockResolvedValue(null);
+    (service as any).messagesService.stopRunning = stopRunning;
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+    const session = {
+      key: 'k',
+      namespaceId: 'n',
+      conversationId: 'c',
+      userId: 'u',
+      shareId: '',
+      subscribers: new Set(),
+      events: [],
+      controller: new AbortController(),
+      handlerContext: context,
+      finished: false,
+    };
+    await (service as any).stopSession(session);
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({ status: 'stopped' }),
+    );
+    // The finalizer must run before stopRunning records stopped_runs; the
+    // closed-row finalizer refuses a stopped run.
+    expect(finalizeAnswerTiming.mock.invocationCallOrder[0]).toBeLessThan(
+      stopRunning.mock.invocationCallOrder[0],
+    );
+  });
+  it('settles the initiating action when a decision resume completes', async () => {
+    const { service, behaviorService } = handlerService();
+    const decisionBehavior = {
+      ...runBehavior,
+      action_id: '44444444-4444-4444-8444-444444444444',
+    };
+    const initiatingBehavior = {
+      ...runBehavior,
+      action_id: '55555555-5555-4555-8555-555555555555',
+    };
+    const handler = behaviorContext.run(decisionBehavior, () =>
+      service.agentHandler('n', 'c', 'u', jest.fn(), false, {
+        streamId: 'active-stream',
+      } as AgentStream),
+    );
+    const context: Record<string, unknown> = {
+      queryId: 'decision',
+      runId: 'run-2',
+      parentId: 'approval',
+      answerTiming: answerTiming(),
+      resumeBehaviors: [initiatingBehavior],
+    };
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({ response_type: 'delta', message: { content: 'done' } }),
+      context,
+    );
+    await handler(JSON.stringify({ response_type: 'eos' }), context);
+    await handler(JSON.stringify({ response_type: 'done' }), context);
+
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      initiatingBehavior,
+      'success',
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      decisionBehavior,
+      'success',
+    );
+    expect(
+      behaviorService.result.mock.calls.filter(
+        (call) =>
+          (call[0] as { action_id?: string }).action_id ===
+          decisionBehavior.action_id,
+      ),
+    ).toHaveLength(1);
+  });
+  it('settles the initiating action as failed when the decision resume errors', async () => {
+    const { service, behaviorService } = handlerService();
+    const decisionBehavior = {
+      ...runBehavior,
+      action_id: '44444444-4444-4444-8444-444444444444',
+    };
+    const initiatingBehavior = {
+      ...runBehavior,
+      action_id: '55555555-5555-4555-8555-555555555555',
+    };
+    const handler = behaviorContext.run(decisionBehavior, () =>
+      service.agentHandler('n', 'c', 'u', jest.fn(), false, {
+        streamId: 'active-stream',
+      } as AgentStream),
+    );
+    const context: Record<string, unknown> = {
+      queryId: 'decision',
+      runId: 'run-2',
+      parentId: 'approval',
+      answerTiming: answerTiming(),
+      resumeBehaviors: [initiatingBehavior],
+    };
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({ response_type: 'error', message: 'boom' }),
+      context,
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      initiatingBehavior,
+      'failed',
+    );
+  });
+  it('settles the initiating action as cancelled when the decision run stops', async () => {
+    const { service, behaviorService } = handlerService();
+    const initiatingBehavior = {
+      ...runBehavior,
+      action_id: '55555555-5555-4555-8555-555555555555',
+    };
+    const context: Record<string, unknown> = {
+      behavior: runBehavior,
+      answerTiming: answerTiming(),
+      resumeBehaviors: [initiatingBehavior],
+    };
+    (service as any).messagesService.stopRunning = jest
+      .fn()
+      .mockResolvedValue(null);
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+    const session = {
+      key: 'k',
+      namespaceId: 'n',
+      conversationId: 'c',
+      userId: 'u',
+      shareId: '',
+      subscribers: new Set(),
+      events: [],
+      controller: new AbortController(),
+      handlerContext: context,
+      finished: false,
+    };
+    await (service as any).stopSession(session);
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      initiatingBehavior,
+      'cancelled',
+    );
+  });
+  it('cancels a steered behavior when the run stops', async () => {
+    const { service, finalizeAnswerTiming, behaviorService } = handlerService();
+    const context: Record<string, unknown> = {
+      behavior: runBehavior,
+      answerTiming: answerTiming(),
+      pendingSteered: new Map([
+        [
+          steeredBehavior.action_id,
+          { behavior: steeredBehavior, lastAssistantRowId: 'assistant-9' },
+        ],
+      ]),
+    };
+    (service as any).messagesService.stopRunning = jest
+      .fn()
+      .mockResolvedValue(null);
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+    const session = {
+      key: 'k',
+      namespaceId: 'n',
+      conversationId: 'c',
+      userId: 'u',
+      shareId: '',
+      subscribers: new Set(),
+      events: [],
+      controller: new AbortController(),
+      handlerContext: context,
+      finished: false,
+    };
+    await (service as any).stopSession(session);
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      steeredBehavior,
+      'cancelled',
+    );
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+      'assistant-9',
+      expect.objectContaining({ status: 'stopped' }),
+    );
+  });
+  it.each([
+    ['eos', 'success', 'complete'],
+    ['newer steer', 'success', 'complete'],
+    ['done', 'success', 'complete'],
+    ['error', 'failed', 'failed'],
+    ['stop', 'cancelled', 'stopped'],
+  ])(
+    'settles the open steered turn from the %s source as %s',
+    async (source, outcome, timingStatus) => {
+      const { service, finalizeAnswerTiming, behaviorService } =
+        handlerService();
+      const context: Record<string, unknown> = {
+        canSteer: true,
+        queryId: 'initial',
+        runId: 'run',
+        parentId: 'initial',
+        answerTiming: answerTiming(),
+      };
+      const settle = jest.spyOn(service as any, 'settleSteeredTurn');
+      const sends: string[] = [];
+      const send = jest.fn((data: string) => {
+        sends.push(data);
+        return Promise.resolve();
+      });
+      const handler = behaviorContext.run(runBehavior, () =>
+        service.agentHandler('n', 'c', 'u', send, false, {
+          streamId: 'active-stream',
+        } as AgentStream),
+      );
+      const sessionSends: string[] = [];
+      let rowId = 'assistant-2';
+      if (source === 'stop') {
+        rowId = 'assistant-9';
+        jest
+          .spyOn(service as any, 'sendSessionData')
+          .mockImplementation((_target: unknown, data: string) => {
+            sessionSends.push(data);
+            return Promise.resolve();
+          });
+        context.pendingSteered = new Map([
+          [
+            steeredBehavior.action_id,
+            { behavior: steeredBehavior, lastAssistantRowId: rowId },
+          ],
+        ]);
+        context.steeredQueue = [steeredBehavior];
+        context.assistantSteeredBehavior = steeredBehavior;
+        (service as any).messagesService.stopRunning = jest
+          .fn()
+          .mockResolvedValue(null);
+        jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+        const session = {
+          key: 'k',
+          namespaceId: 'n',
+          conversationId: 'c',
+          userId: 'u',
+          shareId: '',
+          subscribers: new Set(),
+          events: [],
+          controller: new AbortController(),
+          handlerContext: context,
+          finished: false,
+        };
+        await (service as any).stopSession(session);
+      } else {
+        await handler(
+          JSON.stringify({
+            response_type: 'bos',
+            role: OpenAIMessageRole.USER,
+            attrs: { composer: { client_request_id: requestId } },
+          }),
+          context,
+        );
+        await handler(
+          JSON.stringify({
+            response_type: 'bos',
+            role: OpenAIMessageRole.ASSISTANT,
+          }),
+          context,
+        );
+        if (source === 'eos') {
+          await handler(
+            JSON.stringify({
+              response_type: 'delta',
+              message: { content: 'answer' },
+            }),
+            context,
+          );
+          await handler(JSON.stringify({ response_type: 'eos' }), context);
+        } else if (source === 'newer steer') {
+          await handler(
+            JSON.stringify({
+              response_type: 'bos',
+              role: OpenAIMessageRole.USER,
+              attrs: { composer: { client_request_id: secondRequestId } },
+            }),
+            context,
+          );
+        } else if (source === 'done') {
+          await handler(JSON.stringify({ response_type: 'done' }), context);
+        } else {
+          await handler(
+            JSON.stringify({ response_type: 'error', message: 'boom' }),
+            context,
+          );
+        }
+      }
+
+      expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+        rowId,
+        expect.objectContaining({ status: timingStatus }),
+      );
+      const steeredResults = behaviorService.result.mock.calls.filter(
+        (call) =>
+          (call[0] as { action_id?: string }).action_id ===
+          steeredBehavior.action_id,
+      );
+      expect(steeredResults).toEqual([
+        [
+          expect.objectContaining({ action_id: steeredBehavior.action_id }),
+          outcome,
+        ],
+      ]);
+      const pending = context.pendingSteered as
+        | Map<string, unknown>
+        | undefined;
+      const queue = context.steeredQueue as
+        | Array<{ action_id: string }>
+        | undefined;
+      if (source === 'newer steer') {
+        // The settled turn is gone; the newer steer is armed for its turn.
+        expect(context.assistantSteeredBehavior).toBeUndefined();
+        expect(pending?.has(steeredBehavior.action_id)).toBe(false);
+        expect((queue ?? []).map((behavior) => behavior.action_id)).toEqual([
+          secondSteeredBehavior.action_id,
+        ]);
+      } else {
+        expect(pending?.size ?? 0).toBe(0);
+        expect(queue ?? []).toEqual([]);
+        expect(context.assistantSteeredBehavior).toBeUndefined();
+      }
+      // Only the eos close wires an emitter into the settle; the newer-steer,
+      // done, error and stop paths pass none, so no settle delta can be sent.
+      expect(settle).toHaveBeenCalledTimes(1);
+      const settleOptions = settle.mock.calls[0][3] as {
+        emit?: (...args: unknown[]) => unknown;
+      };
+      if (source === 'eos') expect(typeof settleOptions.emit).toBe('function');
+      else expect(settleOptions.emit).toBeUndefined();
+      // The eos settle emits exactly one answer-timing delta. The error path
+      // also emits its own run-level failed timing delta, which is separate
+      // from the settle and pinned by the error-path tests.
+      if (source !== 'error') {
+        const settleDeltas = [...sends, ...sessionSends].filter((data) => {
+          const chunk = JSON.parse(data);
+          return chunk.response_type === 'delta' && chunk.attrs?.answer_timing;
+        });
+        if (source === 'eos') expect(settleDeltas).toHaveLength(1);
+        else expect(settleDeltas).toEqual([]);
+      }
+    },
+  );
+
+  it('writes the timing, emits and completes the action in that order at a steered eos', async () => {
+    const order: string[] = [];
+    const { service, finalizeAnswerTiming, behaviorService } = handlerService();
+    finalizeAnswerTiming.mockImplementation((id: string, timing: unknown) => {
+      order.push('timing');
+      return Promise.resolve({
+        id,
+        message: { role: 'assistant' },
+        attrs: { answer_timing: timing },
+      });
+    });
+    behaviorService.result.mockImplementation((...args: unknown[]) => {
+      order.push(`result:${String(args[1])}`);
+      return Promise.resolve(undefined);
+    });
+    const send = jest.fn((data: string) => {
+      const chunk = JSON.parse(data);
+      if (chunk.response_type === 'delta' && chunk.attrs?.answer_timing)
+        order.push('emit');
+      return Promise.resolve();
+    });
+    const handler = behaviorContext.run(runBehavior, () =>
+      service.agentHandler('n', 'c', 'u', send, false, {
+        streamId: 'active-stream',
+      } as AgentStream),
+    );
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    await steer(handler, context, requestId);
+
+    expect(order).toEqual(['timing', 'emit', 'result:success']);
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+      'assistant-2',
+      expect.objectContaining({ status: 'complete' }),
+    );
+  });
+
+  it('keeps settling every pending turn when the timing and behavior writes reject', async () => {
+    const { service, finalizeAnswerTiming, behaviorService } = handlerService();
+    finalizeAnswerTiming.mockRejectedValue(new Error('db down'));
+    behaviorService.result.mockRejectedValue(new Error('behavior down'));
+    const second = {
+      ...steeredBehavior,
+      action_id: '55555555-5555-4555-8555-555555555555',
+    };
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+      pendingSteered: new Map([
+        [
+          steeredBehavior.action_id,
+          { behavior: steeredBehavior, lastAssistantRowId: 'assistant-1' },
+        ],
+        [
+          second.action_id,
+          { behavior: second, lastAssistantRowId: 'assistant-2' },
+        ],
+      ]),
+      steeredQueue: [steeredBehavior, second],
+      assistantSteeredBehavior: steeredBehavior,
+    };
+    const handler = handlerOf(service);
+    await handler(
+      JSON.stringify({ response_type: 'error', message: 'boom' }),
+      context,
+    );
+
+    expect(finalizeAnswerTiming).toHaveBeenCalledTimes(2);
+    const steeredResults = behaviorService.result.mock.calls.filter((call) =>
+      [steeredBehavior.action_id, second.action_id].includes(
+        (call[0] as { action_id?: string }).action_id ?? '',
+      ),
+    );
+    expect(
+      steeredResults.map((call) => [
+        (call[0] as { action_id: string }).action_id,
+        call[1],
+      ]),
+    ).toEqual([
+      [steeredBehavior.action_id, 'failed'],
+      [second.action_id, 'failed'],
+    ]);
+    expect(context.pendingSteered).toBeUndefined();
+    expect(context.steeredQueue).toBeUndefined();
+    expect(context.assistantSteeredBehavior).toBeUndefined();
+  });
+
+  it('skips the behavior result when the steered eos emit throws', async () => {
+    const { service, finalizeAnswerTiming, behaviorService } = handlerService();
+    const send = jest.fn((data: string) => {
+      const chunk = JSON.parse(data);
+      if (chunk.response_type === 'delta' && chunk.attrs?.answer_timing)
+        throw new Error('sse down');
+      return Promise.resolve();
+    });
+    const handler = behaviorContext.run(runBehavior, () =>
+      service.agentHandler('n', 'c', 'u', send, false, {
+        streamId: 'active-stream',
+      } as AgentStream),
+    );
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    await expect(steer(handler, context, requestId)).rejects.toThrow(
+      'sse down',
+    );
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+      'assistant-2',
+      expect.objectContaining({ status: 'complete' }),
+    );
+    const steeredResults = behaviorService.result.mock.calls.filter(
+      (call) =>
+        (call[0] as { action_id?: string }).action_id ===
+        steeredBehavior.action_id,
+    );
+    expect(steeredResults).toEqual([]);
+  });
+
+  it('completes the queued behavior when delivery cannot start a turn', async () => {
+    const behaviorService = {
+      result: jest.fn((...args: unknown[]) => {
+        void args;
+        return Promise.resolve(undefined);
+      }),
+    };
+    const service = createService({ behaviorService });
+    jest
+      .spyOn(service as any, 'deliverConversationMessage')
+      .mockRejectedValue(new HttpException('bad request', 400));
+    const queue = {
+      process: jest.fn((_key: string, deliver: (input: unknown) => unknown) =>
+        deliver(job),
+      ),
+    };
+    await (service as any).processSubmission(queue, 'scope');
+    await expect(queue.process.mock.results[0].value).resolves.toMatchObject({
+      disposition: 'failed',
+      client_request_id: requestId,
+    });
+    expect(behaviorService.result).toHaveBeenCalledWith(runBehavior, 'failed');
+  });
+  it.each([
+    ['ios', 'ios'],
+    ['android', 'android'],
+    [undefined, 'web'],
+  ])('traces a queue-started run as %s', async (platform, expected) => {
+    const service = createService({
+      conversationsService: { findOneForUserInNamespace: jest.fn() },
+      messagesService: { findSubmitted: jest.fn() },
+    });
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue({
+      get: jest.fn().mockResolvedValue(undefined),
+      exists: jest.fn().mockResolvedValue(0),
+      eval: jest.fn().mockResolvedValue(0),
+    });
+    const start = jest
+      .spyOn(service as any, 'openUserAgentStream')
+      .mockResolvedValue(
+        of({
+          data: JSON.stringify({
+            response_type: 'bos',
+            role: OpenAIMessageRole.USER,
+            id: 'persisted',
+            attrs: { client_request_id: requestId },
+          }),
+        }),
+      );
+    await (service as any).deliverConversationMessage({
+      ...job,
+      platform,
+    });
+    expect(start.mock.calls[0][7]).toEqual({ platform: expected });
+  });
+});
+
+describe('pending save gate', () => {
+  function gateService() {
+    const service = createService({});
+    const client = {
+      exists: jest.fn().mockResolvedValue(0),
+      set: jest.fn().mockResolvedValue('OK'),
+      eval: jest.fn().mockResolvedValue(0),
+    };
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+    const sleep = jest
+      .spyOn(service as any, 'sleep')
+      .mockResolvedValue(undefined);
+    return { service, client, sleep };
+  }
+
+  it('waits out a pending save before taking the conversation lock', async () => {
+    const { service, client, sleep } = gateService();
+    let checks = 0;
+    client.eval.mockImplementation((script: string) => {
+      if (script !== IS_SAVE_PENDING) return Promise.resolve(1);
+      checks += 1;
+      return Promise.resolve(checks <= 2 ? 1 : 0);
+    });
+
+    const release = await service.acquireConversationLock('n', 'c', 'u', '');
+
+    expect(checks).toBe(3);
+    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(client.eval).toHaveBeenCalledWith(
+      IS_SAVE_PENDING,
+      expect.objectContaining({
+        keys: [saveGateKey('user:u:n:c')],
+        arguments: [expect.any(String)],
+      }),
+    );
+    expect(client.set).toHaveBeenCalledWith(
+      'wizard:lock:conversation:n:c',
+      expect.any(String),
+      { NX: true, EX: 30 },
+    );
+    await release?.();
+  });
+
+  it('takes the lock without checking the gate when asked to ignore it', async () => {
+    const { service, client } = gateService();
+
+    const release = await service.acquireConversationLock('n', 'c', 'u', '', {
+      ignoreSaveGate: true,
+    });
+
+    expect(client.eval).not.toHaveBeenCalledWith(
+      IS_SAVE_PENDING,
+      expect.anything(),
+    );
+    expect(client.set).toHaveBeenCalledTimes(1);
+    await release?.();
+  });
+
+  it.each([
+    ['a decision turn', '', { tool_call: { decisions: [{ type: 'reject' }] } }],
+    ['a share stream', 'share-1', {}],
+    ['a normal ask', '', {}],
+  ])('passes the gate bypass for %s', async (label, shareId, extra) => {
+    const found = jest.fn().mockResolvedValue(null);
+    const service = createService({
+      messagesService: { findLatest: found },
+    });
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+    const claim = jest
+      .spyOn(service as any, 'claimStreamActive')
+      .mockResolvedValue(undefined);
+    const acquire = jest
+      .spyOn(service, 'acquireConversationLock')
+      .mockResolvedValue(null);
+
+    await (service as any).resolveStreamParent(
+      'n',
+      { conversation_id: 'c', query: 'q', tools: [], ...extra },
+      'u',
+      shareId,
+      'latest',
+    );
+
+    const expected =
+      Boolean(shareId) || Boolean((extra as { tool_call?: unknown }).tool_call);
+    expect(acquire).toHaveBeenCalledWith('n', 'c', 'u', shareId, {
+      ignoreSaveGate: expected,
+    });
+    expect(claim).toHaveBeenCalled();
+  });
+
+  it('keeps a queued ask undelivered while a save is pending', async () => {
+    const service = createService({
+      conversationsService: { findOneForUserInNamespace: jest.fn() },
+      messagesService: {
+        findSubmitted: jest.fn(),
+        findOneInConversation: jest.fn(),
+      },
+    });
+    const client = {
+      get: jest.fn().mockResolvedValue(undefined),
+      exists: jest.fn().mockResolvedValue(0),
+      eval: jest.fn().mockResolvedValue(1),
+    };
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+    const start = jest.spyOn(service as any, 'openUserAgentStream');
+    const steer = jest.spyOn(service, 'submitSteer');
+
+    await expect(
+      (service as any).deliverConversationMessage({
+        userId: 'u',
+        namespaceId: 'n',
+        conversationId: 'c',
+        body: {
+          query: 'Continue',
+          tools: [],
+          client_request_id: '14edee90-e083-48c6-ab81-ceb94c77ae03',
+        },
+      }),
+    ).resolves.toBeUndefined();
+    expect(start).not.toHaveBeenCalled();
+    expect(steer).not.toHaveBeenCalled();
+  });
+
+  it('replays a finished submission before checking the save gate', async () => {
+    const service = createService({
+      conversationsService: { findOneForUserInNamespace: jest.fn() },
+      messagesService: {
+        findSubmitted: jest.fn().mockResolvedValue({
+          id: 'stored-message',
+          status: MessageStatus.SUCCESS,
+          message: { content: 'Continue' },
+          attrs: { turn_run_id: 'run-1' },
+        }),
+      },
+    });
+    const evalMock = jest.fn();
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue({
+      get: jest.fn(),
+      exists: jest.fn(),
+      eval: evalMock,
+    });
+
+    await expect(
+      (service as any).deliverConversationMessage({
+        userId: 'u',
+        namespaceId: 'n',
+        conversationId: 'c',
+        body: {
+          query: 'Continue',
+          tools: [],
+          client_request_id: '14edee90-e083-48c6-ab81-ceb94c77ae03',
+        },
+      }),
+    ).resolves.toMatchObject({ disposition: 'steered', id: 'stored-message' });
+    expect(evalMock).not.toHaveBeenCalled();
+  });
+
+  it('shares one admission deadline across a recursive re-claim', async () => {
+    jest.useFakeTimers();
+    try {
+      const service = createService({});
+      const start = Date.now();
+      let activeChecks = 0;
+      const client = {
+        exists: jest.fn(() => {
+          activeChecks += 1;
+          if (activeChecks <= 4) return Promise.resolve(1);
+          if (activeChecks === 5) return Promise.resolve(0);
+          return Promise.resolve(1);
+        }),
+        set: jest.fn().mockResolvedValue('OK'),
+        eval: jest.fn().mockResolvedValue(0),
+      };
+      jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+      jest.spyOn(service as any, 'sleep').mockImplementation(() => {
+        jest.advanceTimersByTime(250);
+        return Promise.resolve();
+      });
+
+      await expect(
+        service.acquireConversationLock('n', 'c', 'u', ''),
+      ).rejects.toMatchObject({ code: 'CONVERSATION_BUSY' });
+
+      // A fresh 290s window per recursion would nearly double the wait.
+      expect(Date.now() - start).toBeLessThanOrEqual(290_500);
+      expect(activeChecks).toBeGreaterThan(4);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('stores the gate key in the steer inbox of a pro run', async () => {
+    const service = createService({
+      wizardApiService: {
+        resolveAgentTarget: jest
+          .fn()
+          .mockResolvedValue({ baseUrl: 'http://wizard', target: 'pro' }),
+        createAgentStream: jest.fn().mockResolvedValue({
+          ok: true,
+          headers: new Headers({ 'x-accept-steer': '1' }),
+          body: null,
+        }),
+      },
+    });
+    const multi = {
+      set: jest.fn().mockReturnThis(),
+      hSet: jest.fn().mockReturnThis(),
+      expire: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([]),
+    };
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue({
+      multi: jest.fn().mockReturnValue(multi),
+    });
+    jest.spyOn(service as any, 'submissionQueue').mockResolvedValue(null);
+    const session: {
+      key: string;
+      shareId: string;
+      handlerContext: any;
+      steerToken?: string;
+    } = {
+      key: 'user:u:n:c',
+      shareId: '',
+      handlerContext: {},
+    };
+    (service as any).streamSessions.set('stream-1', session);
+
+    await expect(
+      service.stream(
+        'n',
+        'ask',
+        { user_id: 'u', messages: [] } as any,
+        'request-1',
+        jest.fn(),
+        undefined,
+        { streamId: 'stream-1' } as AgentStream,
+      ),
+    ).rejects.toMatchObject({ code: 'RESPONSE_BODY_NOT_READABLE' });
+
+    expect(multi.hSet).toHaveBeenCalledWith(
+      'wizard:steer:' + session.steerToken,
+      expect.objectContaining({ save_gate: saveGateKey('user:u:n:c') }),
+    );
+  });
+});
+
+describe('save preemption stop helper', () => {
+  const sessionFor = (key: string, interrupted = false) => ({
+    key,
+    namespaceId: 'n',
+    conversationId: 'c',
+    userId: 'u',
+    shareId: '',
+    subscribers: new Set(),
+    events: [],
+    controller: new AbortController(),
+    handlerContext: {
+      interrupted,
+      queryId: 'query-1',
+      runId: 'run-1',
+      parentId: 'query-1',
+    },
+    finished: false,
+  });
+  const key = getStreamKey('n', 'c', 'u');
+
+  it('does not stop an idle conversation', async () => {
+    const service = createService({});
+    const streaming = jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValue(false);
+    const stop = jest.spyOn(service as any, 'stopSession');
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 100),
+    ).resolves.toBe('idle');
+    expect(stop).not.toHaveBeenCalled();
+    expect(streaming).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies and confirms a stop of a local session', async () => {
+    const service = createService({});
+    (service as any).streamSessions.set(key, sessionFor(key));
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+    const row = { id: 'stopped-row' };
+    const stop = jest
+      .spyOn(service as any, 'stopSession')
+      .mockResolvedValue(row);
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
+    ).resolves.toBe('stopped');
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs a slow deployment hook once for a local session stop', async () => {
+    let finish!: () => void;
+    const onCancellationRequested = jest.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const service = createService({
+      agentStreamHooks: {
+        onCallCompleted: jest.fn(),
+        onStreamClosed: jest.fn(),
+        onCancellationRequested,
+      },
+    });
+    const session = {
+      ...sessionFor(key),
+      steerStopSupported: false,
+    };
+    (service as any).streamSessions.set(key, session);
+    (service as any).messagesService = {
+      stopRunning: jest
+        .fn()
+        .mockResolvedValue({ id: 'stopped-row', attrs: {} }),
+    };
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+    jest
+      .spyOn(service as any, 'markSessionCanceled')
+      .mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+    jest.spyOn(service as any, 'sendSessionData').mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'completeSession')
+      .mockImplementation(() => undefined);
+
+    const stopping = service.stopUserAgentStreamAndWait('u', 'n', 'c', 500);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(onCancellationRequested).toHaveBeenCalledTimes(1);
+    expect(onCancellationRequested).toHaveBeenCalledWith('u', 'c');
+    finish();
+
+    await expect(stopping).resolves.toBe('stopped');
+    // The helper leaves the hook to stopSession; it must not call it again.
+    expect(onCancellationRequested).toHaveBeenCalledTimes(1);
+    expect((service as any).messagesService.stopRunning).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(session.controller.signal.aborted).toBe(true);
+  });
+
+  it('treats a completed run as a no-op stop', async () => {
+    const service = createService({});
+    (service as any).streamSessions.set(key, sessionFor(key));
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+    jest.spyOn(service as any, 'stopSession').mockResolvedValue(null);
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
+    ).resolves.toBe('closed');
+  });
+
+  it('does not stop a run whose terminal answer already closed', async () => {
+    const onCancellationRequested = jest.fn();
+    const service = createService({
+      agentStreamHooks: {
+        onCallCompleted: jest.fn(),
+        onStreamClosed: jest.fn(),
+        onCancellationRequested,
+      },
+    });
+    const answer = {
+      id: 'answer-row',
+      status: MessageStatus.SUCCESS,
+      message: { role: 'assistant', content: 'final answer' },
+    };
+    const session = {
+      ...sessionFor(key),
+      handlerContext: {
+        queryId: 'query-1',
+        runId: 'run-1',
+        parentId: 'query-1',
+        lastEos: { message: answer, endedAt: new Date(), monotonic: 1 },
+        timingFinalized: true,
+      },
+    };
+    (service as any).streamSessions.set(key, session);
+    const stopRunning = jest.fn();
+    (service as any).messagesService = { stopRunning };
+    const mark = jest
+      .spyOn(service as any, 'markSessionCanceled')
+      .mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+    const send = jest
+      .spyOn(service as any, 'sendSessionData')
+      .mockResolvedValue(undefined);
+    const finalize = jest.spyOn(service as any, 'finalizeInitialTurnRow');
+    const complete = jest
+      .spyOn(service as any, 'completeSession')
+      .mockImplementation(() => undefined);
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
+    ).resolves.toBe('closed');
+    // No stopped_runs stamp and no abort: the completed answer is delivered,
+    // and none of the stop's side effects run.
+    expect(stopRunning).not.toHaveBeenCalled();
+    expect(onCancellationRequested).not.toHaveBeenCalled();
+    expect(mark).not.toHaveBeenCalled();
+    expect(finalize).not.toHaveBeenCalled();
+    expect(complete).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    expect(session.controller.signal.aborted).toBe(false);
+    expect((session.handlerContext as any).stopped).toBeUndefined();
+  });
+
+  it('still stops when a queued steer can open another turn', async () => {
+    const service = createService({});
+    const answer = {
+      id: 'answer-row',
+      status: MessageStatus.SUCCESS,
+      message: { role: 'assistant', content: 'final answer' },
+    };
+    const session = {
+      ...sessionFor(key),
+      handlerContext: {
+        queryId: 'query-1',
+        runId: 'run-1',
+        parentId: 'query-1',
+        lastEos: { message: answer, endedAt: new Date(), monotonic: 1 },
+        steeredQueue: [{}],
+      },
+    };
+    (service as any).streamSessions.set(key, session);
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+    const stop = jest
+      .spyOn(service as any, 'stopSession')
+      .mockResolvedValue({ id: 'stopped-row' });
+
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
+    ).resolves.toBe('stopped');
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for a just-registered run to persist its query before stopping', async () => {
+    const service = createService({});
+    const session = {
+      ...sessionFor(key),
+      handlerContext: {},
+    };
+    (service as any).streamSessions.set(key, session);
+    const stopRunning = jest
+      .fn()
+      .mockResolvedValue({ id: 'stopped-row', attrs: {} });
+    (service as any).messagesService = { stopRunning };
+    jest
+      .spyOn(service as any, 'markSessionCanceled')
+      .mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+    jest.spyOn(service as any, 'sendSessionData').mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'completeSession')
+      .mockImplementation(() => undefined);
+    (service as any).agentStreamHooks.onCancellationRequested = jest.fn();
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+    setTimeout(() => {
+      session.handlerContext = {
+        queryId: 'query-1',
+        runId: 'run-1',
+        parentId: 'query-1',
+      };
+    }, 10);
+
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
+    ).resolves.toBe('stopped');
+    // The stop ran only after the query row existed and passed its identity,
+    // so it stamps stopped_runs instead of leaving the bot a failed receipt.
+    expect(stopRunning).toHaveBeenCalledWith('n', 'c', 'u', 'query-1', {
+      id: 'run-1',
+      queryId: 'query-1',
+    });
+  });
+
+  it('re-checks pausing after the deployment hook before a remote stop', async () => {
+    const order: string[] = [];
+    const findLatest = jest
+      .fn()
+      .mockImplementationOnce(() => {
+        order.push('latest');
+        return Promise.resolve({ id: 'answer', attrs: {} });
+      })
+      .mockImplementationOnce(() => {
+        order.push('latest-after-hook');
+        return Promise.resolve({
+          id: 'interrupt',
+          attrs: { tool_call: { interrupts: [{}] } },
+        });
+      });
+    const onCancellationRequested = jest.fn(() => {
+      order.push('hook');
+      return Promise.resolve();
+    });
+    const stopRunning = jest.fn();
+    const service = createService({
+      agentStreamHooks: {
+        onCallCompleted: jest.fn(),
+        onStreamClosed: jest.fn(),
+        onCancellationRequested,
+      },
+      messagesService: { findLatest, stopRunning },
+    });
+    const mark = jest
+      .spyOn(service as any, 'markSessionCanceled')
+      .mockResolvedValue(undefined);
+    jest.spyOn(service, 'isConversationStreaming').mockResolvedValue(true);
+
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 100),
+    ).resolves.toBe('pausing');
+    expect(order).toEqual(['latest', 'hook', 'latest-after-hook']);
+    expect(stopRunning).not.toHaveBeenCalled();
+    expect(mark).not.toHaveBeenCalled();
+  });
+
+  it('skips a locally pausing run', async () => {
+    const service = createService({});
+    (service as any).streamSessions.set(key, sessionFor(key, true));
+    jest.spyOn(service, 'isConversationStreaming').mockResolvedValue(true);
+    const stop = jest.spyOn(service as any, 'stopSession');
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 100),
+    ).resolves.toBe('pausing');
+    expect(stop).not.toHaveBeenCalled();
+  });
+
+  it('applies the essential remote steps when the deployment hook rejects', async () => {
+    const onCancellationRequested = jest
+      .fn()
+      .mockRejectedValue(new Error('local runtime down'));
+    const stopRunning = jest.fn().mockResolvedValue({ id: 'stopped-row' });
+    const service = createService({
+      agentStreamHooks: {
+        onCallCompleted: jest.fn(),
+        onStreamClosed: jest.fn(),
+        onCancellationRequested,
+      },
+      messagesService: {
+        findLatest: jest.fn().mockResolvedValue(null),
+        stopRunning,
+      },
+    });
+    const client = {
+      set: jest.fn(),
+      publish: jest.fn().mockResolvedValue(1),
+    };
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
+    ).resolves.toBe('stopped');
+    expect(onCancellationRequested).toHaveBeenCalledTimes(1);
+    expect(stopRunning).toHaveBeenCalledWith('n', 'c', 'u');
+    expect(client.publish).toHaveBeenCalledWith(
+      `wizard:stream:${key}:control`,
+      'cancel',
+    );
+  });
+
+  it('does not stop a remotely pausing run', async () => {
+    const service = createService({
+      messagesService: {
+        findLatest: jest.fn().mockResolvedValue({
+          id: 'interrupt',
+          attrs: { tool_call: { interrupts: [{}] } },
+        }),
+        stopRunning: jest.fn(),
+      },
+    });
+    jest.spyOn(service, 'isConversationStreaming').mockResolvedValue(true);
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 100),
+    ).resolves.toBe('pausing');
+  });
+
+  const completedRemoteAnswer = (overrides: Record<string, unknown> = {}) => ({
+    id: 'answer',
+    status: MessageStatus.SUCCESS,
+    message: { role: 'assistant', content: 'final answer' },
+    attrs: { turn_run_id: 'run-1', answer_timing: { status: 'running' } },
+    ...overrides,
+  });
+
+  const remoteClient = (overrides: Record<string, jest.Mock> = {}) => ({
+    get: jest.fn((redisKey: string) => {
+      if (redisKey === `wizard:steer-active:${key}`)
+        return Promise.resolve('run-1');
+      if (redisKey === `wizard:steer-route:${key}:run-1`)
+        return Promise.resolve('token-1');
+      return Promise.resolve(null);
+    }),
+    lRange: jest.fn().mockResolvedValue([]),
+    hGet: jest.fn().mockResolvedValue(null),
+    set: jest.fn(),
+    publish: jest.fn(),
+    ...overrides,
+  });
+
+  it('does not stop a completed remote run whose done is still pending', async () => {
+    const onCancellationRequested = jest.fn();
+    const findLatest = jest.fn().mockResolvedValue(completedRemoteAnswer());
+    const stopRunning = jest.fn();
+    const service = createService({
+      agentStreamHooks: {
+        onCallCompleted: jest.fn(),
+        onStreamClosed: jest.fn(),
+        onCancellationRequested,
+      },
+      messagesService: { findLatest, stopRunning },
+    });
+    const client = remoteClient();
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+    const mark = jest
+      .spyOn(service as any, 'markSessionCanceled')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
+    ).resolves.toBe('closed');
+    // The latest row is the active run's closed answer; the owning replica
+    // finishes it, so nothing is marked, stamped or published.
+    expect(onCancellationRequested).toHaveBeenCalledTimes(1);
+    expect(stopRunning).not.toHaveBeenCalled();
+    expect(mark).not.toHaveBeenCalled();
+    expect(client.set).not.toHaveBeenCalled();
+    expect(client.publish).not.toHaveBeenCalled();
+  });
+
+  it('does not stop when every visible steer item is already persisted', async () => {
+    const findLatest = jest.fn().mockResolvedValue(completedRemoteAnswer());
+    const stopRunning = jest.fn();
+    const service = createService({
+      messagesService: { findLatest, stopRunning },
+    });
+    const client = remoteClient({
+      lRange: jest
+        .fn()
+        .mockResolvedValue([JSON.stringify({ client_request_id: 'steer-1' })]),
+      hGet: jest.fn().mockResolvedValue('user-row-1'),
+    });
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
+    ).resolves.toBe('closed');
+    expect(stopRunning).not.toHaveBeenCalled();
+    expect(client.publish).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'a tool-call answer',
+      { message: { role: 'assistant', content: 'x', tool_calls: [{}] } },
+    ],
+    ['a streaming row', { status: MessageStatus.STREAMING }],
+    [
+      'an answer whose done already ran',
+      {
+        attrs: {
+          turn_run_id: 'run-1',
+          answer_timing: { status: 'complete' },
+        },
+      },
+    ],
+  ])('stops a remote run whose latest row is %s', async (_label, overrides) => {
+    const findLatest = jest
+      .fn()
+      .mockResolvedValue(completedRemoteAnswer(overrides));
+    const stopRunning = jest.fn().mockResolvedValue(null);
+    const service = createService({
+      messagesService: { findLatest, stopRunning },
+    });
+    const client = remoteClient();
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+    jest
+      .spyOn(service as any, 'markSessionCanceled')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
+    ).resolves.toBe('closed');
+    expect(stopRunning).toHaveBeenCalledWith('n', 'c', 'u');
+    expect(client.publish).toHaveBeenCalledWith(
+      `wizard:stream:${key}:control`,
+      'cancel',
+    );
+  });
+
+  it('stops a completed remote run while a steer item is not yet persisted', async () => {
+    const findLatest = jest.fn().mockResolvedValue(completedRemoteAnswer());
+    const stopRunning = jest.fn().mockResolvedValue(null);
+    const service = createService({
+      messagesService: { findLatest, stopRunning },
+    });
+    const client = remoteClient({
+      lRange: jest
+        .fn()
+        .mockResolvedValue([JSON.stringify({ client_request_id: 'steer-1' })]),
+      hGet: jest.fn().mockResolvedValue(null),
+    });
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+    jest
+      .spyOn(service as any, 'markSessionCanceled')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
+    ).resolves.toBe('closed');
+    expect(stopRunning).toHaveBeenCalledWith('n', 'c', 'u');
+    expect(client.publish).toHaveBeenCalledWith(
+      `wizard:stream:${key}:control`,
+      'cancel',
+    );
+  });
+
+  it('waits for admission on a control-channel stop', async () => {
+    const service = createService({});
+    const session = {
+      ...sessionFor(key),
+      handlerContext: {},
+    };
+    (service as any).streamSessions.set(key, session);
+    let callback!: () => void;
+    const subscriber = {
+      subscribe: jest.fn((_channel: string, cb: () => void) => {
+        callback = cb;
+        return Promise.resolve(1);
+      }),
+    };
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue({
+      set: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn(),
+    });
+    jest
+      .spyOn(service as any, 'getRedisSubscriber')
+      .mockResolvedValue(subscriber);
+    const wait = jest
+      .spyOn(service as any, 'waitForAdmission')
+      .mockImplementation((target: any) => {
+        target.handlerContext.queryId = 'query-1';
+        return Promise.resolve();
+      });
+    const stop = jest
+      .spyOn(service as any, 'stopSession')
+      .mockResolvedValue({ id: 'stopped-row' });
+
+    await (service as any).startRedisSession(session);
+    callback();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(wait).toHaveBeenCalledWith(session, 5_000);
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the scope unconfirmed when it stays open past the sub-bound', async () => {
+    const service = createService({});
+    (service as any).streamSessions.set(key, sessionFor(key));
+    jest.spyOn(service, 'isConversationStreaming').mockResolvedValue(true);
+    jest
+      .spyOn(service as any, 'stopSession')
+      .mockResolvedValue({ id: 'stopped-row' });
+    jest.spyOn(service as any, 'sleep').mockResolvedValue(undefined);
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 0),
+    ).resolves.toBe('unconfirmed');
+  });
+
+  it('treats an unreadable stream state as no attempt', async () => {
+    const service = createService({});
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockRejectedValue(new Error('redis down'));
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 100),
+    ).resolves.toBe('unknown');
+  });
+
+  it.each([
+    ['idle', 'idle'],
+    ['unknown', 'unknown'],
+    ['pausing', 'pausing'],
+    ['stopped', 'stopped'],
+    ['closed', 'closed'],
+    ['unconfirmed', 'unconfirmed'],
+  ] as const)('maps the %s state to its outcome', async (state, outcome) => {
+    const service = createService({});
+    if (state !== 'idle' && state !== 'unknown')
+      (service as any).streamSessions.set(key, sessionFor(key));
+    const streaming = jest.spyOn(service, 'isConversationStreaming');
+    if (state === 'unknown')
+      streaming.mockRejectedValue(new Error('redis down'));
+    else if (state === 'idle') streaming.mockResolvedValue(false);
+    else {
+      streaming.mockResolvedValueOnce(true);
+      streaming.mockResolvedValue(state === 'unconfirmed');
+    }
+    const stop = jest.spyOn(service as any, 'stopSession');
+    if (state === 'pausing')
+      (service as any).streamSessions.get(key).handlerContext.interrupted =
+        true;
+    else if (state === 'stopped' || state === 'unconfirmed')
+      stop.mockResolvedValue({ id: 'stopped-row' });
+    else if (state === 'closed') stop.mockResolvedValue(null);
+    if (state === 'unconfirmed')
+      jest.spyOn(service as any, 'sleep').mockResolvedValue(undefined);
+
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 0),
+    ).resolves.toBe(outcome);
+  });
+});
+
+describe('conversation lock active-stream bypass', () => {
+  function clientWith(activeKeyExists: boolean, gatePending = false) {
+    return {
+      exists: jest.fn().mockResolvedValue(activeKeyExists ? 1 : 0),
+      set: jest.fn().mockResolvedValue('OK'),
+      eval: jest.fn((_script: string, options: { keys: string[] }) => {
+        if (options.keys[0].startsWith('wizard:save-gate:'))
+          return Promise.resolve(gatePending ? 1 : 0);
+        return Promise.resolve(0);
+      }),
+      del: jest.fn(),
+    };
+  }
+
+  it('takes the lock while an active stream exists when asked to ignore it', async () => {
+    const service = createService({});
+    const client = clientWith(true);
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+    const release = await service.acquireConversationLock('n', 'c', 'u', '', {
+      ignoreSaveGate: true,
+      ignoreActiveStream: true,
+    });
+    expect(release).not.toBeNull();
+    expect(client.set).toHaveBeenCalled();
+    await release?.();
+  });
+
+  it('still waits on the save gate when only the active stream is ignored', async () => {
+    const service = createService({});
+    const client = clientWith(false, true);
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+    jest.spyOn(service as any, 'sleep').mockResolvedValue(undefined);
+    await expect(
+      service.acquireConversationLock(
+        'n',
+        'c',
+        'u',
+        '',
+        {
+          ignoreActiveStream: true,
+        },
+        Date.now() - 1,
+      ),
+    ).rejects.toMatchObject({ code: 'CONVERSATION_BUSY' });
   });
 });

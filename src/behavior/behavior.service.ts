@@ -44,6 +44,9 @@ export class BehaviorService {
       userId: context.user_id,
     });
     if (!row || row.actionType !== context.action_type) return false;
+    // A retried request carries the original frozen action id; remember that
+    // this attempt may legitimately correct a failed outcome.
+    if (row.status === 'failed') context.reopened = true;
     context.action_started_at = row.startedAt.toISOString();
     context.origin_platform = row.originPlatform;
     return true;
@@ -63,11 +66,34 @@ export class BehaviorService {
     status: 'success' | 'failed' | 'cancelled',
     at = new Date(),
   ) {
+    const row = await this.actions.findOneBy({
+      id: context.action_id,
+      userId: context.user_id,
+    });
+    if (!row) return;
+    // Conversation actions settle once. Their terminal answer timing can be
+    // visible to reconcileAnswers before the run ends and a later outcome must
+    // not flip a settled action, so only a pending action accepts an outcome.
+    // The one correction is a retried send (the same frozen action id) whose
+    // first request failed; cancelled/stopped stay terminal.
+    const retryCorrection =
+      status === 'success' &&
+      context.reopened === true &&
+      row.actionType === 'ai_conversation' &&
+      row.status === 'failed';
+    const acceptedStatus =
+      row.actionType === 'ai_conversation'
+        ? retryCorrection
+          ? 'failed'
+          : 'pending'
+        : status === 'success'
+          ? Not('success')
+          : 'pending';
     await this.actions.update(
       {
         id: context.action_id,
         userId: context.user_id,
-        status: status === 'success' ? Not('success') : 'pending',
+        status: acceptedStatus,
       },
       { status, resultAt: at, emittedAt: null },
     );

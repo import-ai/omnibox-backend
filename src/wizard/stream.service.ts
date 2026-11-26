@@ -196,8 +196,6 @@ interface HandlerContext {
   steeredQueue?: BehaviorContext[];
   /** The steered send owning the assistant rows currently open. */
   assistantSteeredBehavior?: BehaviorContext;
-  /** The latest assistant row of the currently open steered turn. */
-  assistantSteeredRowId?: string;
   /** Steered behaviors seen in this run that are not completed yet. */
   pendingSteered?: Map<
     string,
@@ -290,6 +288,14 @@ function agentStreamOf(session: StreamSession): AgentStream {
     shareId: session.shareId || undefined,
   };
 }
+
+export type StopStreamOutcome =
+  | 'idle'
+  | 'pausing'
+  | 'unknown'
+  | 'stopped'
+  | 'closed'
+  | 'unconfirmed';
 
 @Injectable()
 export class StreamService implements OnModuleDestroy {
@@ -823,7 +829,6 @@ export class StreamService implements OnModuleDestroy {
             context.assistantSteeredBehavior.action_id,
           );
           if (pending) pending.lastAssistantRowId = message.id;
-          context.assistantSteeredRowId = message.id;
         }
         if (context.runId)
           chunk.attrs = {
@@ -921,33 +926,19 @@ export class StreamService implements OnModuleDestroy {
         // A steered turn ends with its closing/final assistant row. Complete
         // the steered action there instead of waiting for the run's last row,
         // so a later run outcome cannot report it twice.
+        const steeredBehavior = context.assistantSteeredBehavior;
         if (
-          context.assistantSteeredBehavior &&
+          steeredBehavior &&
           message.message.role === OpenAIMessageRole.ASSISTANT &&
-          message.id === context.assistantSteeredRowId &&
           message.message.content?.trim() &&
           !message.message.tool_calls?.length
         ) {
-          const steered = context.assistantSteeredBehavior;
-          context.assistantSteeredBehavior = undefined;
-          context.assistantSteeredRowId = undefined;
-          context.steeredQueue = context.steeredQueue?.filter(
-            (behavior) => behavior.action_id !== steered.action_id,
-          );
-          context.pendingSteered?.delete(steered.action_id);
-          if (context.answerTiming) {
-            const saved = await this.messagesService
-              .setAnswerTiming(
-                message.id,
-                finishAnswerTiming(
-                  context.answerTiming,
-                  'complete',
-                  endedAt,
-                  monotonic,
-                ),
-              )
-              .catch(() => undefined);
-            if (saved?.attrs?.answer_timing) {
+          await this.settleSteeredTurn(context, steeredBehavior, 'success', {
+            userId,
+            at: { endedAt, monotonic },
+            requireLatestRow: message.id,
+            emit: async (saved) => {
+              if (!saved.attrs?.answer_timing) return;
               await send(
                 JSON.stringify(
                   this.forVisitor(
@@ -961,12 +952,8 @@ export class StreamService implements OnModuleDestroy {
                   ),
                 ),
               );
-            }
-          }
-          if (steered.user_id === userId)
-            await this.behaviorService
-              ?.result(steered, 'success')
-              .catch(() => undefined);
+            },
+          });
         }
         context.message = message.message;
         context.parentId = message.id;
@@ -1052,6 +1039,7 @@ export class StreamService implements OnModuleDestroy {
         await this.settleSteeredBehaviors(
           context,
           context.failed || context.interrupted ? 'failed' : 'success',
+          userId,
         );
         // A clean run (including a decision resume) settles the initiating
         // actions of the interrupted runs it continued. Another pause leaves
@@ -1081,7 +1069,7 @@ export class StreamService implements OnModuleDestroy {
             .catch(() => undefined);
         const failedAt = new Date();
         context.failed = true;
-        await this.settleSteeredBehaviors(context, 'failed');
+        await this.settleSteeredBehaviors(context, 'failed', userId);
         await this.finalizeInitialTurnRow(context, 'failed');
         await this.completeResumeBehaviors(context, 'failed');
         this.reportChatErrorTrace(chunk, {
@@ -1284,6 +1272,61 @@ export class StreamService implements OnModuleDestroy {
   }
 
   /**
+   * Settle one steered turn: make its latest assistant row's timing terminal,
+   * release the open refs/queue entry, and complete its behavior action once.
+   * A transient timing or behavior failure is swallowed so the settle-all
+   * loop keeps going; an emit failure still propagates (and skips the
+   * behavior result), matching the eos path.
+   */
+  private async settleSteeredTurn(
+    context: HandlerContext,
+    turn: BehaviorContext,
+    outcome: 'success' | 'failed' | 'cancelled',
+    options: {
+      userId: string;
+      at?: { endedAt: Date; monotonic: number };
+      requireLatestRow?: string;
+      emit?: (saved: Message) => Promise<void> | void;
+    },
+  ) {
+    const pending = context.pendingSteered?.get(turn.action_id);
+    if (
+      options.requireLatestRow &&
+      pending?.lastAssistantRowId !== options.requireLatestRow
+    )
+      return;
+    if (context.assistantSteeredBehavior?.action_id === turn.action_id)
+      context.assistantSteeredBehavior = undefined;
+    context.steeredQueue = context.steeredQueue?.filter(
+      (behavior) => behavior.action_id !== turn.action_id,
+    );
+    context.pendingSteered?.delete(turn.action_id);
+    if (pending?.lastAssistantRowId && context.answerTiming) {
+      const timing =
+        outcome === 'success'
+          ? finishAnswerTiming(
+              context.answerTiming,
+              'complete',
+              options.at?.endedAt ?? new Date(),
+              options.at?.monotonic ?? performance.now(),
+            )
+          : endAnswerTiming(
+              context.answerTiming.value,
+              outcome === 'cancelled' ? 'stopped' : 'failed',
+            );
+      // The steered turn's assistant row was already closed as SUCCESS by its
+      // eos; the closed-row finalizer is what persists the failed or stopped
+      // outcome used by the answer reconciler.
+      const saved = await this.messagesService
+        .finalizeAnswerTiming(pending.lastAssistantRowId, timing)
+        .catch(() => undefined);
+      if (saved && options.emit) await options.emit(saved);
+    }
+    if (turn.user_id === options.userId)
+      await this.behaviorService?.result(turn, outcome).catch(() => undefined);
+  }
+
+  /**
    * Close the steered turn that is still open when a newer steer arrives.
    * Its latest assistant row keeps its own action id and receives a terminal
    * timing, and the action completes even if the turn produced no content.
@@ -1291,30 +1334,7 @@ export class StreamService implements OnModuleDestroy {
   private async closeOpenSteeredTurn(context: HandlerContext, userId: string) {
     const open = context.assistantSteeredBehavior;
     if (!open) return;
-    const pending = context.pendingSteered?.get(open.action_id);
-    context.assistantSteeredBehavior = undefined;
-    context.assistantSteeredRowId = undefined;
-    context.steeredQueue = context.steeredQueue?.filter(
-      (behavior) => behavior.action_id !== open.action_id,
-    );
-    context.pendingSteered?.delete(open.action_id);
-    if (pending?.lastAssistantRowId && context.answerTiming) {
-      await this.messagesService
-        .finalizeAnswerTiming(
-          pending.lastAssistantRowId,
-          finishAnswerTiming(
-            context.answerTiming,
-            'complete',
-            new Date(),
-            performance.now(),
-          ),
-        )
-        .catch(() => undefined);
-    }
-    if (open.user_id === userId)
-      await this.behaviorService
-        ?.result(open, 'success')
-        .catch(() => undefined);
+    await this.settleSteeredTurn(context, open, 'success', { userId });
   }
 
   /**
@@ -1325,38 +1345,16 @@ export class StreamService implements OnModuleDestroy {
   private async settleSteeredBehaviors(
     context: HandlerContext,
     status: 'success' | 'failed' | 'cancelled',
+    userId: string,
   ) {
     const pending = context.pendingSteered;
     if (!pending?.size) return;
+    const turns = [...pending.values()].map((entry) => entry.behavior);
+    for (const behavior of turns)
+      await this.settleSteeredTurn(context, behavior, status, { userId });
     context.pendingSteered = undefined;
     context.steeredQueue = undefined;
     context.assistantSteeredBehavior = undefined;
-    context.assistantSteeredRowId = undefined;
-    for (const { behavior, lastAssistantRowId } of pending.values()) {
-      if (lastAssistantRowId && context.answerTiming) {
-        const timing =
-          status === 'success'
-            ? finishAnswerTiming(
-                context.answerTiming,
-                'complete',
-                new Date(),
-                performance.now(),
-              )
-            : endAnswerTiming(
-                context.answerTiming.value,
-                status === 'cancelled' ? 'stopped' : 'failed',
-              );
-        // The steered turn's assistant row was already closed as SUCCESS by
-        // its eos; the closed-row finalizer is what persists the failed or
-        // stopped outcome used by the answer reconciler.
-        await this.messagesService
-          .finalizeAnswerTiming(lastAssistantRowId, timing)
-          .catch(() => undefined);
-      }
-      await this.behaviorService
-        ?.result(behavior, status)
-        .catch(() => undefined);
-    }
   }
 
   findOneOrFail(messages: Message[], messageId: string): Message {
@@ -2090,10 +2088,6 @@ export class StreamService implements OnModuleDestroy {
         { keys: [lockKey], arguments: [token] },
       );
     };
-  }
-
-  saveGateKey(scope: string): string {
-    return saveGateKey(scope);
   }
 
   async beginPendingSave(
@@ -2895,7 +2889,11 @@ export class StreamService implements OnModuleDestroy {
         await this.behaviorService
           ?.result(session.handlerContext.behavior, 'cancelled')
           .catch(() => undefined);
-      await this.settleSteeredBehaviors(session.handlerContext, 'cancelled');
+      await this.settleSteeredBehaviors(
+        session.handlerContext,
+        'cancelled',
+        session.userId,
+      );
       await this.completeResumeBehaviors(session.handlerContext, 'cancelled');
       const stoppedMessageId = session.handlerContext.messageId ?? message?.id;
       if (message?.attrs?.answer_timing) {
@@ -3732,21 +3730,19 @@ export class StreamService implements OnModuleDestroy {
 
   /**
    * Stop the owner's streaming run and wait, bounded, for its stream scope to
-   * close. `applied` means a stopped row was written (not merely that the
-   * scope closed); `confirmed` means the scope is gone. A run that is just
-   * pausing at an approval is skipped.
+   * close. `stopped` means a stopped row was written and the scope closed;
+   * `closed` means no stopped row was written and the scope closed (typically
+   * the completed-answer no-op); `unconfirmed` means the scope stayed open or
+   * the poll failed after an attempt. A run that is just pausing at an
+   * approval (`pausing`) and an unreadable stream state (`unknown`) are
+   * skipped without a stop.
    */
   async stopUserAgentStreamAndWait(
     userId: string,
     namespaceId: string,
     conversationId: string,
     timeoutMs = 10_000,
-  ): Promise<{
-    attempted: boolean;
-    applied: boolean;
-    confirmed: boolean;
-    pausing?: boolean;
-  }> {
+  ): Promise<StopStreamOutcome> {
     const key = getStreamKey(namespaceId, conversationId, userId);
     try {
       if (
@@ -3756,10 +3752,10 @@ export class StreamService implements OnModuleDestroy {
           userId,
         ))
       )
-        return { attempted: false, applied: false, confirmed: true };
+        return 'idle';
     } catch (error) {
       this.logger.error({ error });
-      return { attempted: false, applied: false, confirmed: false };
+      return 'unknown';
     }
     let applied = false;
     try {
@@ -3769,13 +3765,7 @@ export class StreamService implements OnModuleDestroy {
         conversationId,
         userId,
       );
-      if (stop.pausing)
-        return {
-          attempted: false,
-          applied: false,
-          confirmed: false,
-          pausing: true,
-        };
+      if (stop.pausing) return 'pausing';
       applied = stop.applied;
     } catch (error) {
       this.logger.error({ error });
@@ -3800,7 +3790,8 @@ export class StreamService implements OnModuleDestroy {
       }
       await this.sleep(100);
     }
-    return { attempted: true, applied, confirmed };
+    if (!confirmed) return 'unconfirmed';
+    return applied ? 'stopped' : 'closed';
   }
 
   async createUserAgentStream(

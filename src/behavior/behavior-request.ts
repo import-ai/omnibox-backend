@@ -4,7 +4,12 @@ export type RequestActionType =
   | 'ai_conversation'
   | 'annotation_comment'
   | 'document_comment';
-/** Matches only explicit product writes; background synchronization has no registered starter. */
+/**
+ * Matches only explicit product writes; background synchronization has no
+ * registered starter. The route rules are mirrored in
+ * omnibox-web/src/lib/behaviorRequest.ts and
+ * omnibox-react-native/lib/behavior-request.ts; keep them in sync.
+ */
 export function behaviorRequestKind(
   method: string,
   url: string,

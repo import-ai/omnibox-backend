@@ -400,26 +400,7 @@ export class MessagesService {
     id: string,
     timing: AnswerTiming,
   ): Promise<Message | null> {
-    return this.dataSource.transaction(async (manager) => {
-      const message = await this.lockStreamMessage(manager, id);
-      if (
-        (timing.status === 'failed'
-          ? message.status !== MessageStatus.FAILED
-          : message.status !== MessageStatus.SUCCESS) ||
-        message.attrs?.turn_run_id !== timing.run_id ||
-        message.attrs?.answer_timing?.answer_id !== timing.answer_id
-      )
-        return null;
-      if (message.attrs.turn_id) {
-        const turn = await manager
-          .getRepository(Message)
-          .findOneByOrFail({ id: message.attrs.turn_id });
-        if (turn.attrs?.stopped_runs?.includes(timing.run_id)) return null;
-      }
-      if (message.attrs.answer_timing?.status !== 'running') return message;
-      message.attrs = { ...message.attrs, answer_timing: timing };
-      return manager.save(message);
-    });
+    return this.writeAnswerTiming(id, timing, { requireRowStatus: true });
   }
 
   /**
@@ -432,11 +413,26 @@ export class MessagesService {
     id: string,
     timing: AnswerTiming,
   ): Promise<Message | null> {
+    return this.writeAnswerTiming(id, timing, { requireRowStatus: false });
+  }
+
+  private async writeAnswerTiming(
+    id: string,
+    timing: AnswerTiming,
+    options: { requireRowStatus: boolean },
+  ): Promise<Message | null> {
     return this.dataSource.transaction(async (manager) => {
       const message = await this.lockStreamMessage(manager, id);
       if (
         message.attrs?.turn_run_id !== timing.run_id ||
         message.attrs?.answer_timing?.answer_id !== timing.answer_id
+      )
+        return null;
+      if (
+        options.requireRowStatus &&
+        (timing.status === 'failed'
+          ? message.status !== MessageStatus.FAILED
+          : message.status !== MessageStatus.SUCCESS)
       )
         return null;
       if (message.attrs.turn_id) {

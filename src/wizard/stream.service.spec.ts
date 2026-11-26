@@ -4490,7 +4490,7 @@ describe('queue behavior attribution', () => {
     expect(behaviorService.result).toHaveBeenCalledWith(runBehavior, 'success');
   });
   it('attributes a steered deferred delivery to the steered action', async () => {
-    const { service, create, setAnswerTiming, behaviorService } =
+    const { service, create, finalizeAnswerTiming, behaviorService } =
       handlerService();
     const context: Record<string, unknown> = {
       canSteer: true,
@@ -4506,7 +4506,7 @@ describe('queue behavior attribution', () => {
     expect(rows[0].behavior_action_id).toBe(steeredBehavior.action_id);
     expect(rows[1].behavior_action_id).toBe(steeredBehavior.action_id);
     expect(rows[0].client_request_id).toBe(requestId);
-    expect(setAnswerTiming).toHaveBeenCalledWith(
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
       'assistant-2',
       expect.objectContaining({ status: 'complete' }),
     );
@@ -4517,7 +4517,7 @@ describe('queue behavior attribution', () => {
     expect(behaviorService.result).toHaveBeenCalledWith(runBehavior, 'success');
   });
   it('completes both steered actions in a two-steer run', async () => {
-    const { service, create, setAnswerTiming, behaviorService } =
+    const { service, create, finalizeAnswerTiming, behaviorService } =
       handlerService();
     const context: Record<string, unknown> = {
       canSteer: true,
@@ -4538,10 +4538,10 @@ describe('queue behavior attribution', () => {
       secondSteeredBehavior.action_id,
     ]);
     expect(
-      setAnswerTiming.mock.calls.slice(0, 2).map((call) => call[0]),
+      finalizeAnswerTiming.mock.calls.slice(0, 2).map((call) => call[0]),
     ).toEqual(['assistant-2', 'assistant-4']);
     expect(
-      setAnswerTiming.mock.calls
+      finalizeAnswerTiming.mock.calls
         .slice(0, 2)
         .map((call) => (call[1] as { status: string }).status),
     ).toEqual(['complete', 'complete']);
@@ -4555,7 +4555,7 @@ describe('queue behavior attribution', () => {
     );
   });
   it('attributes two direct steers delivered in one batch to their own turns', async () => {
-    const { service, create, setAnswerTiming, behaviorService } =
+    const { service, create, finalizeAnswerTiming, behaviorService } =
       handlerService();
     const context: Record<string, unknown> = {
       canSteer: true,
@@ -4602,7 +4602,7 @@ describe('queue behavior attribution', () => {
       secondSteeredBehavior.action_id,
     ]);
     expect(
-      setAnswerTiming.mock.calls.map((call) => call[0]).slice(0, 2),
+      finalizeAnswerTiming.mock.calls.map((call) => call[0]).slice(0, 2),
     ).toEqual(['assistant-3', 'assistant-4']);
     expect(behaviorService.result).toHaveBeenCalledWith(
       steeredBehavior,
@@ -4614,13 +4614,8 @@ describe('queue behavior attribution', () => {
     );
   });
   it('closes an interrupted steer before attributing the next steer', async () => {
-    const {
-      service,
-      create,
-      setAnswerTiming,
-      finalizeAnswerTiming,
-      behaviorService,
-    } = handlerService();
+    const { service, create, finalizeAnswerTiming, behaviorService } =
+      handlerService();
     const context: Record<string, unknown> = {
       canSteer: true,
       queryId: 'initial',
@@ -4681,7 +4676,7 @@ describe('queue behavior attribution', () => {
       'assistant-2',
       expect.objectContaining({ status: 'complete' }),
     );
-    expect(setAnswerTiming).toHaveBeenCalledWith(
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
       'assistant-4',
       expect.objectContaining({ status: 'complete' }),
     );
@@ -4744,14 +4739,8 @@ describe('queue behavior attribution', () => {
     );
   });
   it('finalizes the initial turn row at the run outcome after an eos-first steer', async () => {
-    const {
-      service,
-      create,
-      update,
-      setAnswerTiming,
-      finalizeAnswerTiming,
-      behaviorService,
-    } = handlerService();
+    const { service, create, update, finalizeAnswerTiming, behaviorService } =
+      handlerService();
     const context: Record<string, unknown> = {
       canSteer: true,
       queryId: 'initial',
@@ -4795,8 +4784,11 @@ describe('queue behavior attribution', () => {
       context,
     );
     await handler(JSON.stringify({ response_type: 'eos' }), context);
-    // Nothing finalized the initial row before the run outcome.
-    expect(finalizeAnswerTiming).not.toHaveBeenCalled();
+    // The steered eos finalized its own row; the initial row still waits.
+    expect(finalizeAnswerTiming).not.toHaveBeenCalledWith(
+      'assistant-1',
+      expect.anything(),
+    );
     await handler(JSON.stringify({ response_type: 'done' }), context);
 
     expect(finalizeAnswerTiming).toHaveBeenCalledWith(
@@ -4810,7 +4802,7 @@ describe('queue behavior attribution', () => {
       steeredBehavior.action_id,
       steeredBehavior.action_id,
     ]);
-    expect(setAnswerTiming).toHaveBeenCalledWith(
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
       'assistant-3',
       expect.objectContaining({ status: 'complete' }),
     );
@@ -5082,6 +5074,263 @@ describe('queue behavior attribution', () => {
       expect.objectContaining({ status: 'stopped' }),
     );
   });
+  it.each([
+    ['eos', 'success', 'complete'],
+    ['newer steer', 'success', 'complete'],
+    ['done', 'success', 'complete'],
+    ['error', 'failed', 'failed'],
+    ['stop', 'cancelled', 'stopped'],
+  ])(
+    'settles the open steered turn from the %s source as %s',
+    async (source, outcome, timingStatus) => {
+      const { service, finalizeAnswerTiming, behaviorService } =
+        handlerService();
+      const context: Record<string, unknown> = {
+        canSteer: true,
+        queryId: 'initial',
+        runId: 'run',
+        parentId: 'initial',
+        answerTiming: answerTiming(),
+      };
+      const handler = handlerOf(service);
+      let rowId = 'assistant-2';
+      if (source === 'stop') {
+        rowId = 'assistant-9';
+        context.pendingSteered = new Map([
+          [
+            steeredBehavior.action_id,
+            { behavior: steeredBehavior, lastAssistantRowId: rowId },
+          ],
+        ]);
+        context.steeredQueue = [steeredBehavior];
+        context.assistantSteeredBehavior = steeredBehavior;
+        (service as any).messagesService.stopRunning = jest
+          .fn()
+          .mockResolvedValue(null);
+        jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+        const session = {
+          key: 'k',
+          namespaceId: 'n',
+          conversationId: 'c',
+          userId: 'u',
+          shareId: '',
+          subscribers: new Set(),
+          events: [],
+          controller: new AbortController(),
+          handlerContext: context,
+          finished: false,
+        };
+        await (service as any).stopSession(session);
+      } else {
+        await handler(
+          JSON.stringify({
+            response_type: 'bos',
+            role: OpenAIMessageRole.USER,
+            attrs: { composer: { client_request_id: requestId } },
+          }),
+          context,
+        );
+        await handler(
+          JSON.stringify({
+            response_type: 'bos',
+            role: OpenAIMessageRole.ASSISTANT,
+          }),
+          context,
+        );
+        if (source === 'eos') {
+          await handler(
+            JSON.stringify({
+              response_type: 'delta',
+              message: { content: 'answer' },
+            }),
+            context,
+          );
+          await handler(JSON.stringify({ response_type: 'eos' }), context);
+        } else if (source === 'newer steer') {
+          await handler(
+            JSON.stringify({
+              response_type: 'bos',
+              role: OpenAIMessageRole.USER,
+              attrs: { composer: { client_request_id: secondRequestId } },
+            }),
+            context,
+          );
+        } else if (source === 'done') {
+          await handler(JSON.stringify({ response_type: 'done' }), context);
+        } else {
+          await handler(
+            JSON.stringify({ response_type: 'error', message: 'boom' }),
+            context,
+          );
+        }
+      }
+
+      expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+        rowId,
+        expect.objectContaining({ status: timingStatus }),
+      );
+      const steeredResults = behaviorService.result.mock.calls.filter(
+        (call) =>
+          (call[0] as { action_id?: string }).action_id ===
+          steeredBehavior.action_id,
+      );
+      expect(steeredResults).toEqual([
+        [
+          expect.objectContaining({ action_id: steeredBehavior.action_id }),
+          outcome,
+        ],
+      ]);
+      const pending = context.pendingSteered as
+        | Map<string, unknown>
+        | undefined;
+      const queue = context.steeredQueue as
+        | Array<{ action_id: string }>
+        | undefined;
+      if (source === 'newer steer') {
+        // The settled turn is gone; the newer steer is armed for its turn.
+        expect(context.assistantSteeredBehavior).toBeUndefined();
+        expect(pending?.has(steeredBehavior.action_id)).toBe(false);
+        expect((queue ?? []).map((behavior) => behavior.action_id)).toEqual([
+          secondSteeredBehavior.action_id,
+        ]);
+      } else {
+        expect(pending?.size ?? 0).toBe(0);
+        expect(queue ?? []).toEqual([]);
+        expect(context.assistantSteeredBehavior).toBeUndefined();
+      }
+    },
+  );
+
+  it('writes the timing, emits and completes the action in that order at a steered eos', async () => {
+    const order: string[] = [];
+    const { service, finalizeAnswerTiming, behaviorService } = handlerService();
+    finalizeAnswerTiming.mockImplementation((id: string, timing: unknown) => {
+      order.push('timing');
+      return Promise.resolve({
+        id,
+        message: { role: 'assistant' },
+        attrs: { answer_timing: timing },
+      });
+    });
+    behaviorService.result.mockImplementation((...args: unknown[]) => {
+      order.push(`result:${String(args[1])}`);
+      return Promise.resolve(undefined);
+    });
+    const send = jest.fn((data: string) => {
+      const chunk = JSON.parse(data);
+      if (chunk.response_type === 'delta' && chunk.attrs?.answer_timing)
+        order.push('emit');
+      return Promise.resolve();
+    });
+    const handler = behaviorContext.run(runBehavior, () =>
+      service.agentHandler('n', 'c', 'u', send, false, {
+        streamId: 'active-stream',
+      } as AgentStream),
+    );
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    await steer(handler, context, requestId);
+
+    expect(order).toEqual(['timing', 'emit', 'result:success']);
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+      'assistant-2',
+      expect.objectContaining({ status: 'complete' }),
+    );
+  });
+
+  it('keeps settling every pending turn when the timing and behavior writes reject', async () => {
+    const { service, finalizeAnswerTiming, behaviorService } = handlerService();
+    finalizeAnswerTiming.mockRejectedValue(new Error('db down'));
+    behaviorService.result.mockRejectedValue(new Error('behavior down'));
+    const second = {
+      ...steeredBehavior,
+      action_id: '55555555-5555-4555-8555-555555555555',
+    };
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+      pendingSteered: new Map([
+        [
+          steeredBehavior.action_id,
+          { behavior: steeredBehavior, lastAssistantRowId: 'assistant-1' },
+        ],
+        [
+          second.action_id,
+          { behavior: second, lastAssistantRowId: 'assistant-2' },
+        ],
+      ]),
+      steeredQueue: [steeredBehavior, second],
+      assistantSteeredBehavior: steeredBehavior,
+    };
+    const handler = handlerOf(service);
+    await handler(
+      JSON.stringify({ response_type: 'error', message: 'boom' }),
+      context,
+    );
+
+    expect(finalizeAnswerTiming).toHaveBeenCalledTimes(2);
+    const steeredResults = behaviorService.result.mock.calls.filter((call) =>
+      [steeredBehavior.action_id, second.action_id].includes(
+        (call[0] as { action_id?: string }).action_id ?? '',
+      ),
+    );
+    expect(
+      steeredResults.map((call) => [
+        (call[0] as { action_id: string }).action_id,
+        call[1],
+      ]),
+    ).toEqual([
+      [steeredBehavior.action_id, 'failed'],
+      [second.action_id, 'failed'],
+    ]);
+    expect(context.pendingSteered).toBeUndefined();
+    expect(context.steeredQueue).toBeUndefined();
+    expect(context.assistantSteeredBehavior).toBeUndefined();
+  });
+
+  it('skips the behavior result when the steered eos emit throws', async () => {
+    const { service, finalizeAnswerTiming, behaviorService } = handlerService();
+    const send = jest.fn((data: string) => {
+      const chunk = JSON.parse(data);
+      if (chunk.response_type === 'delta' && chunk.attrs?.answer_timing)
+        throw new Error('sse down');
+      return Promise.resolve();
+    });
+    const handler = behaviorContext.run(runBehavior, () =>
+      service.agentHandler('n', 'c', 'u', send, false, {
+        streamId: 'active-stream',
+      } as AgentStream),
+    );
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    await expect(steer(handler, context, requestId)).rejects.toThrow(
+      'sse down',
+    );
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+      'assistant-2',
+      expect.objectContaining({ status: 'complete' }),
+    );
+    const steeredResults = behaviorService.result.mock.calls.filter(
+      (call) =>
+        (call[0] as { action_id?: string }).action_id ===
+        steeredBehavior.action_id,
+    );
+    expect(steeredResults).toEqual([]);
+  });
+
   it('completes the queued behavior when delivery cannot start a turn', async () => {
     const behaviorService = {
       result: jest.fn((...args: unknown[]) => {
@@ -5413,7 +5662,7 @@ describe('save preemption stop helper', () => {
     const stop = jest.spyOn(service as any, 'stopSession');
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 100),
-    ).resolves.toEqual({ attempted: false, applied: false, confirmed: true });
+    ).resolves.toBe('idle');
     expect(stop).not.toHaveBeenCalled();
     expect(streaming).toHaveBeenCalledTimes(1);
   });
@@ -5431,7 +5680,7 @@ describe('save preemption stop helper', () => {
       .mockResolvedValue(row);
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
-    ).resolves.toEqual({ attempted: true, applied: true, confirmed: true });
+    ).resolves.toBe('stopped');
     expect(stop).toHaveBeenCalledTimes(1);
   });
 
@@ -5479,11 +5728,7 @@ describe('save preemption stop helper', () => {
     expect(onCancellationRequested).toHaveBeenCalledWith('u', 'c');
     finish();
 
-    await expect(stopping).resolves.toEqual({
-      attempted: true,
-      applied: true,
-      confirmed: true,
-    });
+    await expect(stopping).resolves.toBe('stopped');
     // The helper leaves the hook to stopSession; it must not call it again.
     expect(onCancellationRequested).toHaveBeenCalledTimes(1);
     expect((service as any).messagesService.stopRunning).toHaveBeenCalledTimes(
@@ -5502,7 +5747,7 @@ describe('save preemption stop helper', () => {
     jest.spyOn(service as any, 'stopSession').mockResolvedValue(null);
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
-    ).resolves.toEqual({ attempted: true, applied: false, confirmed: true });
+    ).resolves.toBe('closed');
   });
 
   it('does not stop a run whose terminal answer already closed', async () => {
@@ -5550,7 +5795,7 @@ describe('save preemption stop helper', () => {
 
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
-    ).resolves.toEqual({ attempted: true, applied: false, confirmed: true });
+    ).resolves.toBe('closed');
     // No stopped_runs stamp and no abort: the completed answer is delivered,
     // and none of the stop's side effects run.
     expect(stopRunning).not.toHaveBeenCalled();
@@ -5591,7 +5836,7 @@ describe('save preemption stop helper', () => {
 
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
-    ).resolves.toEqual({ attempted: true, applied: true, confirmed: true });
+    ).resolves.toBe('stopped');
     expect(stop).toHaveBeenCalledTimes(1);
   });
 
@@ -5629,7 +5874,7 @@ describe('save preemption stop helper', () => {
 
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
-    ).resolves.toEqual({ attempted: true, applied: true, confirmed: true });
+    ).resolves.toBe('stopped');
     // The stop ran only after the query row existed and passed its identity,
     // so it stamps stopped_runs instead of leaving the bot a failed receipt.
     expect(stopRunning).toHaveBeenCalledWith('n', 'c', 'u', 'query-1', {
@@ -5673,7 +5918,7 @@ describe('save preemption stop helper', () => {
 
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 100),
-    ).resolves.toMatchObject({ attempted: false, pausing: true });
+    ).resolves.toBe('pausing');
     expect(order).toEqual(['latest', 'hook', 'latest-after-hook']);
     expect(stopRunning).not.toHaveBeenCalled();
     expect(mark).not.toHaveBeenCalled();
@@ -5686,7 +5931,7 @@ describe('save preemption stop helper', () => {
     const stop = jest.spyOn(service as any, 'stopSession');
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 100),
-    ).resolves.toMatchObject({ attempted: false, pausing: true });
+    ).resolves.toBe('pausing');
     expect(stop).not.toHaveBeenCalled();
   });
 
@@ -5717,7 +5962,7 @@ describe('save preemption stop helper', () => {
       .mockResolvedValue(false);
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
-    ).resolves.toEqual({ attempted: true, applied: true, confirmed: true });
+    ).resolves.toBe('stopped');
     expect(onCancellationRequested).toHaveBeenCalledTimes(1);
     expect(stopRunning).toHaveBeenCalledWith('n', 'c', 'u');
     expect(client.publish).toHaveBeenCalledWith(
@@ -5739,7 +5984,7 @@ describe('save preemption stop helper', () => {
     jest.spyOn(service, 'isConversationStreaming').mockResolvedValue(true);
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 100),
-    ).resolves.toMatchObject({ attempted: false, pausing: true });
+    ).resolves.toBe('pausing');
   });
 
   const completedRemoteAnswer = (overrides: Record<string, unknown> = {}) => ({
@@ -5789,7 +6034,7 @@ describe('save preemption stop helper', () => {
 
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
-    ).resolves.toEqual({ attempted: true, applied: false, confirmed: true });
+    ).resolves.toBe('closed');
     // The latest row is the active run's closed answer; the owning replica
     // finishes it, so nothing is marked, stamped or published.
     expect(onCancellationRequested).toHaveBeenCalledTimes(1);
@@ -5819,7 +6064,7 @@ describe('save preemption stop helper', () => {
 
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
-    ).resolves.toEqual({ attempted: true, applied: false, confirmed: true });
+    ).resolves.toBe('closed');
     expect(stopRunning).not.toHaveBeenCalled();
     expect(client.publish).not.toHaveBeenCalled();
   });
@@ -5859,11 +6104,7 @@ describe('save preemption stop helper', () => {
 
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
-    ).resolves.toEqual({
-      attempted: true,
-      applied: false,
-      confirmed: true,
-    });
+    ).resolves.toBe('closed');
     expect(stopRunning).toHaveBeenCalledWith('n', 'c', 'u');
     expect(client.publish).toHaveBeenCalledWith(
       `wizard:stream:${key}:control`,
@@ -5894,7 +6135,7 @@ describe('save preemption stop helper', () => {
 
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
-    ).resolves.toEqual({ attempted: true, applied: false, confirmed: true });
+    ).resolves.toBe('closed');
     expect(stopRunning).toHaveBeenCalledWith('n', 'c', 'u');
     expect(client.publish).toHaveBeenCalledWith(
       `wizard:stream:${key}:control`,
@@ -5951,7 +6192,7 @@ describe('save preemption stop helper', () => {
     jest.spyOn(service as any, 'sleep').mockResolvedValue(undefined);
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 0),
-    ).resolves.toEqual({ attempted: true, applied: true, confirmed: false });
+    ).resolves.toBe('unconfirmed');
   });
 
   it('treats an unreadable stream state as no attempt', async () => {
@@ -5961,7 +6202,41 @@ describe('save preemption stop helper', () => {
       .mockRejectedValue(new Error('redis down'));
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 100),
-    ).resolves.toEqual({ attempted: false, applied: false, confirmed: false });
+    ).resolves.toBe('unknown');
+  });
+
+  it.each([
+    ['idle', 'idle'],
+    ['unknown', 'unknown'],
+    ['pausing', 'pausing'],
+    ['stopped', 'stopped'],
+    ['closed', 'closed'],
+    ['unconfirmed', 'unconfirmed'],
+  ] as const)('maps the %s state to its outcome', async (state, outcome) => {
+    const service = createService({});
+    if (state !== 'idle' && state !== 'unknown')
+      (service as any).streamSessions.set(key, sessionFor(key));
+    const streaming = jest.spyOn(service, 'isConversationStreaming');
+    if (state === 'unknown')
+      streaming.mockRejectedValue(new Error('redis down'));
+    else if (state === 'idle') streaming.mockResolvedValue(false);
+    else {
+      streaming.mockResolvedValueOnce(true);
+      streaming.mockResolvedValue(state === 'unconfirmed');
+    }
+    const stop = jest.spyOn(service as any, 'stopSession');
+    if (state === 'pausing')
+      (service as any).streamSessions.get(key).handlerContext.interrupted =
+        true;
+    else if (state === 'stopped' || state === 'unconfirmed')
+      stop.mockResolvedValue({ id: 'stopped-row' });
+    else if (state === 'closed') stop.mockResolvedValue(null);
+    if (state === 'unconfirmed')
+      jest.spyOn(service as any, 'sleep').mockResolvedValue(undefined);
+
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 0),
+    ).resolves.toBe(outcome);
   });
 });
 

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { trace } from '@opentelemetry/api';
 import { plainToInstance } from 'class-transformer';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { getActiveTraceHeaders } from 'omniboxd/tracing/trace-headers';
 
 import { NamespaceTier } from './dto/namespace-tier.enum';
 import { NamespaceUsageDto } from './dto/namespace-usage.dto';
@@ -29,6 +30,7 @@ export class NamespacesQuotaService {
     try {
       response = await fetch(
         `${this.proUrl}/internal/api/v1/namespaces/${namespaceId}/usages`,
+        { headers: getActiveTraceHeaders() },
       );
     } catch {
       return new NamespaceUsageDto();
@@ -87,6 +89,7 @@ export class NamespacesQuotaService {
     try {
       const response = await fetch(
         `${this.proUrl}/internal/api/v1/pro-namespaces?${params}`,
+        { headers: getActiveTraceHeaders() },
       );
       if (!response.ok) {
         const data = (await response.json().catch(() => ({}))) as {

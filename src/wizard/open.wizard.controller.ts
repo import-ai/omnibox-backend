@@ -1,6 +1,11 @@
 import {
   Body,
   Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
   Post,
   UploadedFile,
   UseInterceptors,
@@ -32,7 +37,10 @@ import {
   CollectUrlResponseDto,
   OpenCollectUrlRequestDto,
 } from 'omniboxd/wizard/dto/collect-url-request.dto';
-import { OpenAgentRequestDto } from 'omniboxd/wizard/dto/open-agent-request.dto';
+import {
+  OpenAgentRequestDto,
+  OpenConversationMessageDto,
+} from 'omniboxd/wizard/dto/open-agent-request.dto';
 import { OpenCollectRequestDto } from 'omniboxd/wizard/dto/open-collect-request.dto';
 import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
@@ -136,7 +144,8 @@ curl -X POST 'https://api.omnibox.pro/v1/wizard/collect/gzip' \\
   })
   @ApiResponse({
     status: 201,
-    description: 'Question answered successfully',
+    description:
+      'Returns the messages. If stopped, status is "stopped" and the messages may include a partial reply.',
   })
   @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
@@ -151,6 +160,74 @@ curl -X POST 'https://api.omnibox.pro/v1/wizard/collect/gzip' \\
       apiKey.namespaceId,
       requestId,
       data,
+    );
+  }
+
+  @Post('conversations')
+  @APIKeyAuth({
+    permissions: [
+      {
+        target: APIKeyPermissionTarget.CHAT,
+        permissions: [APIKeyPermissionType.CREATE],
+      },
+    ],
+  })
+  createConversation(
+    @APIKey() key: APIKeyEntity,
+    @UserId() userId: string,
+    @Body() data: Pick<OpenAgentRequestDto, 'parent_message_id'>,
+  ) {
+    return this.openWizardService.createBotConversation(
+      userId,
+      key.namespaceId,
+      data.parent_message_id,
+    );
+  }
+
+  @Post('conversations/:conversationId/messages')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @APIKeyAuth({
+    permissions: [
+      {
+        target: APIKeyPermissionTarget.CHAT,
+        permissions: [APIKeyPermissionType.CREATE],
+      },
+    ],
+  })
+  submitConversationMessage(
+    @APIKey() key: APIKeyEntity,
+    @UserId() userId: string,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Body() data: OpenConversationMessageDto,
+  ) {
+    return this.openWizardService.submitBotMessage(
+      userId,
+      key.namespaceId,
+      conversationId,
+      data,
+    );
+  }
+
+  @Get('conversations/:conversationId/messages/:requestId')
+  @APIKeyAuth({
+    permissions: [
+      {
+        target: APIKeyPermissionTarget.CHAT,
+        permissions: [APIKeyPermissionType.CREATE],
+      },
+    ],
+  })
+  getConversationMessage(
+    @APIKey() key: APIKeyEntity,
+    @UserId() userId: string,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
+  ) {
+    return this.openWizardService.botMessageResult(
+      userId,
+      key.namespaceId,
+      conversationId,
+      requestId,
     );
   }
 

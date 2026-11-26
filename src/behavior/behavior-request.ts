@@ -4,7 +4,12 @@ export type RequestActionType =
   | 'ai_conversation'
   | 'annotation_comment'
   | 'document_comment';
-/** Matches only explicit product writes; background synchronization has no registered starter. */
+/**
+ * Matches only explicit product writes; background synchronization has no
+ * registered starter. The route rules are mirrored in
+ * omnibox-web/src/lib/behaviorRequest.ts and
+ * omnibox-react-native/lib/behavior-request.ts; keep them in sync.
+ */
 export function behaviorRequestKind(
   method: string,
   url: string,
@@ -38,7 +43,13 @@ export function behaviorRequestKind(
     ['name', 'content'].some((key) => key in data)
   )
     return 'resource_edit';
-  if (verb === 'POST' && /\/wizard\/(ask|chat)$/.test(path))
+  if (
+    verb === 'POST' &&
+    (/\/wizard\/(ask|chat)$/.test(path) ||
+      /^\/namespaces\/[^/]+\/wizard\/conversations\/[^/]+\/messages$/.test(
+        path,
+      ))
+  )
     return 'ai_conversation';
   if (
     verb === 'POST' &&

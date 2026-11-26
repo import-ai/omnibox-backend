@@ -129,6 +129,49 @@ describe('stopped turn persistence', () => {
     await expect(service.stopRunning('n', 'c', undefined)).resolves.toBeNull();
     expect(rows[1].attrs?.turn_status).toBeUndefined();
   });
+  it('accepts the background tool result exactly once after its stream row closes', async () => {
+    const { service, rows } = fixture([
+      row(
+        'tool',
+        null,
+        R.TOOL,
+        S.SUCCESS,
+        { tool_call: { status: 'running' } },
+        'call',
+      ),
+    ]);
+    const delta = {
+      response_type: 'delta' as const,
+      message: { tool_call_id: 'call', content: 'created' },
+      attrs: { tool_call: { status: 'success' as const } },
+    };
+    await service.updateDelta('tool', delta);
+    await service.updateDelta('tool', delta);
+    expect(rows[0].message.content).toBe('created');
+    expect(rows[0].attrs?.tool_call?.status).toBe('success');
+    expect(rows[0].status).toBe(S.SUCCESS);
+  });
+  it('settles usage for an already closed assistant message only once', async () => {
+    const { service, rows } = fixture([row('a', null, R.ASSISTANT)]);
+    const usage = {
+      prompt_tokens: 120,
+      completion_tokens: 20,
+      prompt_tokens_details: { cached_tokens: 100 },
+    };
+    await expect(
+      service.settleInterruptedUsage('a', usage),
+    ).resolves.toMatchObject({
+      inputTokenCached: 100,
+      inputTokenUncached: 20,
+      outputToken: 20,
+      status: S.SUCCESS,
+    });
+    await expect(
+      service.settleInterruptedUsage('a', usage),
+    ).resolves.toBeUndefined();
+    expect(rows[0].outputToken).toBe(20);
+  });
+
   it('keeps stopped messages stopped after late deltas, EOS and checkpoints', async () => {
     const { service, rows } = fixture([
       row('q', null, R.USER),
@@ -259,6 +302,57 @@ describe('answer timing persistence under the turn lock', () => {
       expect(repo.save).not.toHaveBeenCalled();
     },
   );
+
+  it.each(['failed', 'stopped'] as const)(
+    'persists %s timing on a steered row already closed as SUCCESS',
+    async (status) => {
+      const { service, repo, rows } = fixture(rowsForTiming());
+      const terminal = {
+        version: 1 as const,
+        answer_id: 'answer',
+        run_id: 'run',
+        status,
+        started_at: new Date(1).toISOString(),
+        completed_at: new Date(2001).toISOString(),
+      };
+      const saved = await service.finalizeAnswerTiming('answer', terminal);
+      expect(saved?.attrs?.answer_timing?.status).toBe(status);
+      expect(rows[1].status).toBe(S.SUCCESS);
+      expect(repo.save).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('does not finalize a closed row for another run, answer or after a terminal timing', async () => {
+    const wrongRun = fixture(rowsForTiming());
+    expect(
+      await wrongRun.service.finalizeAnswerTiming('answer', {
+        ...timing,
+        status: 'failed',
+        run_id: 'other',
+      }),
+    ).toBeNull();
+    expect(wrongRun.repo.save).not.toHaveBeenCalled();
+
+    const wrongAnswer = fixture(rowsForTiming());
+    expect(
+      await wrongAnswer.service.finalizeAnswerTiming('answer', {
+        ...timing,
+        status: 'failed',
+        answer_id: 'other',
+      }),
+    ).toBeNull();
+    expect(wrongAnswer.repo.save).not.toHaveBeenCalled();
+
+    const finished = fixture(rowsForTiming());
+    finished.rows[1].attrs!.answer_timing = { ...timing, status: 'complete' };
+    expect(
+      await finished.service.finalizeAnswerTiming('answer', {
+        ...timing,
+        status: 'failed',
+      }),
+    ).toMatchObject({ id: 'answer' });
+    expect(finished.repo.save).not.toHaveBeenCalled();
+  });
 });
 
 describe('unified cross-client timing outcomes', () => {
@@ -311,4 +405,18 @@ it('stops post-EOS timing when cancellation arrives on another instance without 
   await service.stopRunning('n', 'c', undefined, 'a1');
   expect(rows[0].attrs?.stopped_runs).toContain('run');
   expect(rows[1].attrs?.answer_timing?.status).toBe('stopped');
+});
+
+it('stops the original run after an intervening steer message', async () => {
+  const attrs = { turn_id: 'q', turn_run_id: 'run' };
+  const { service, rows } = fixture([
+    row('q', null, R.USER),
+    row('a', 'q', R.ASSISTANT, S.SUCCESS, attrs),
+    row('steer', 'a', R.USER, S.SUCCESS, attrs),
+    row('reply', 'steer', R.ASSISTANT, S.STREAMING, attrs),
+  ]);
+  await service.stopRunning('n', 'c', undefined, 'reply');
+  expect(rows[0].attrs?.stopped_runs).toContain('run');
+  expect(rows[2].status).toBe(S.SUCCESS);
+  expect(rows[3].status).toBe(S.STOPPED);
 });

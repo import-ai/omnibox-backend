@@ -1,13 +1,26 @@
 import { HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import {
+  MessageStatus,
+  OpenAIMessageRole,
+} from 'omniboxd/messages/entities/message.entity';
 import { AgentRequestChannel } from 'omniboxd/wizard/dto/agent-request.dto';
 import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
 import { EntityNotFoundError } from 'typeorm';
 
 describe('OpenWizardService', () => {
   let service: OpenWizardService;
-  let streamService: { chat: jest.Mock };
-  let messagesService: { findOneForUser: jest.Mock };
+  let streamService: {
+    chat: jest.Mock;
+    submitConversationMessage: jest.Mock;
+    isConversationStreaming: jest.Mock;
+    submissionStatus: jest.Mock;
+  };
+  let messagesService: {
+    findOneForUser: jest.Mock;
+    findAll: jest.Mock;
+    findSubmitted: jest.Mock;
+  };
   let conversationsService: {
     create: jest.Mock;
     findOneForUserInNamespace: jest.Mock;
@@ -16,9 +29,14 @@ describe('OpenWizardService', () => {
   beforeEach(() => {
     streamService = {
       chat: jest.fn().mockResolvedValue([]),
+      submitConversationMessage: jest.fn(),
+      isConversationStreaming: jest.fn().mockResolvedValue(false),
+      submissionStatus: jest.fn(),
     };
     messagesService = {
       findOneForUser: jest.fn(),
+      findAll: jest.fn(),
+      findSubmitted: jest.fn(),
     };
     conversationsService = {
       create: jest.fn(),
@@ -32,6 +50,227 @@ describe('OpenWizardService', () => {
       conversationsService as any,
       { t: jest.fn(() => 'Message not found') } as any,
     );
+  });
+
+  it('submits a Bot message through the durable conversation queue', async () => {
+    const input = {
+      query: 'follow up',
+      tools: [],
+      source_channel: 'qq',
+      client_request_id: 'client',
+    };
+    streamService.submitConversationMessage.mockResolvedValue({
+      disposition: 'queued',
+    });
+    await expect(
+      service.submitBotMessage('u', 'n', 'c', input),
+    ).resolves.toMatchObject({ disposition: 'queued' });
+    expect(streamService.submitConversationMessage).toHaveBeenCalledWith(
+      'n',
+      'c',
+      'u',
+      {
+        ...input,
+        conversation_id: 'c',
+        channel: AgentRequestChannel.OPEN_API,
+      },
+      undefined,
+      true,
+    );
+  });
+
+  it('exposes the final reply only to the last input in a steered run', async () => {
+    const row = (id: string, role: OpenAIMessageRole, parentId?: string) => ({
+      id,
+      parentId,
+      message: { role, content: id },
+      status: MessageStatus.SUCCESS,
+      attrs: id === 'first' ? {} : { turn_run_id: 'first-request' },
+    });
+    const first = row('first', OpenAIMessageRole.USER);
+    const partial = row('partial', OpenAIMessageRole.ASSISTANT, first.id);
+    const next = row('next', OpenAIMessageRole.USER, partial.id);
+    const reply = row('final', OpenAIMessageRole.ASSISTANT, next.id);
+    messagesService.findAll.mockResolvedValue([first, partial, next, reply]);
+    messagesService.findSubmitted
+      .mockResolvedValueOnce(first)
+      .mockResolvedValue(next);
+
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'first-request'),
+    ).resolves.toEqual({ status: 'superseded' });
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'next-request'),
+    ).resolves.toEqual({
+      status: 'complete',
+      reply_id: 'final',
+      content: 'final',
+    });
+    streamService.isConversationStreaming.mockResolvedValue(true);
+    // A later turn streaming must not hide this input's own final answer.
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'next-request'),
+    ).resolves.toEqual({
+      status: 'complete',
+      reply_id: 'final',
+      content: 'final',
+    });
+  });
+
+  it('keeps the requested turn pending while its own answer is still streaming', async () => {
+    const input = {
+      id: 'input',
+      parentId: undefined,
+      message: { role: OpenAIMessageRole.USER, content: 'question' },
+      status: MessageStatus.SUCCESS,
+      attrs: { turn_run_id: 'run' },
+    };
+    const answer = {
+      id: 'answer',
+      parentId: 'input',
+      message: { role: OpenAIMessageRole.ASSISTANT, content: 'partial' },
+      status: MessageStatus.STREAMING,
+      attrs: { turn_run_id: 'run' },
+    };
+    messagesService.findSubmitted.mockResolvedValue(input);
+    messagesService.findAll.mockResolvedValue([input, answer]);
+    streamService.isConversationStreaming.mockResolvedValue(true);
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'run'),
+    ).resolves.toEqual({ status: 'pending' });
+
+    streamService.isConversationStreaming.mockResolvedValue(false);
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'run'),
+    ).resolves.toEqual({ status: 'failed' });
+  });
+
+  it('completes a later steer whose own answer is terminal while the run streams', async () => {
+    const input = {
+      id: 'steer-b',
+      parentId: 'answer-a',
+      message: { role: OpenAIMessageRole.USER, content: 'second steer' },
+      status: MessageStatus.SUCCESS,
+      attrs: { turn_run_id: 'run' },
+    };
+    const firstAnswer = {
+      id: 'answer-a',
+      parentId: 'input-a',
+      message: { role: OpenAIMessageRole.ASSISTANT, content: 'first' },
+      status: MessageStatus.SUCCESS,
+      attrs: { turn_run_id: 'run' },
+    };
+    const answerB = {
+      id: 'answer-b',
+      parentId: 'steer-b',
+      message: { role: OpenAIMessageRole.ASSISTANT, content: 'second' },
+      status: MessageStatus.SUCCESS,
+      attrs: { turn_run_id: 'run' },
+    };
+    messagesService.findSubmitted.mockResolvedValue(input);
+    messagesService.findAll.mockResolvedValue([firstAnswer, input, answerB]);
+    streamService.isConversationStreaming.mockResolvedValue(true);
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'steer-b'),
+    ).resolves.toEqual({
+      status: 'complete',
+      reply_id: 'answer-b',
+      content: 'second',
+    });
+  });
+
+  it('returns failed for the requested turn while a later turn streams', async () => {
+    const input = {
+      id: 'failed-input',
+      parentId: undefined,
+      message: { role: OpenAIMessageRole.USER, content: 'question' },
+      status: MessageStatus.SUCCESS,
+      attrs: { turn_run_id: 'failed-run' },
+    };
+    const answer = {
+      id: 'failed-answer',
+      parentId: 'failed-input',
+      message: { role: OpenAIMessageRole.ASSISTANT, content: '' },
+      status: MessageStatus.FAILED,
+      attrs: { turn_run_id: 'failed-run' },
+    };
+    messagesService.findSubmitted.mockResolvedValue(input);
+    messagesService.findAll.mockResolvedValue([input, answer]);
+    streamService.isConversationStreaming.mockResolvedValue(true);
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'failed-run'),
+    ).resolves.toEqual({ status: 'failed' });
+  });
+  it('returns stopped for a persisted input even after its receipt expires', async () => {
+    messagesService.findSubmitted.mockResolvedValue({
+      status: MessageStatus.STOPPED,
+    });
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'stopped-request'),
+    ).resolves.toEqual({ status: 'stopped' });
+    expect(streamService.submissionStatus).not.toHaveBeenCalled();
+  });
+
+  it('returns stopped for a turn whose run carries a stopped_runs stamp', async () => {
+    const input = {
+      id: 'stopped-turn-input',
+      parentId: undefined,
+      message: { role: OpenAIMessageRole.USER, content: 'question' },
+      status: MessageStatus.SUCCESS,
+      attrs: { turn_run_id: 'run' },
+    };
+    const stoppedAnswer = {
+      id: 'stopped-turn-answer',
+      parentId: 'stopped-turn-input',
+      message: { role: OpenAIMessageRole.ASSISTANT, content: '' },
+      status: MessageStatus.FAILED,
+      attrs: { turn_run_id: 'run', stopped_runs: ['run'] },
+    };
+    messagesService.findSubmitted.mockResolvedValue(input);
+    messagesService.findAll.mockResolvedValue([input, stoppedAnswer]);
+    // The stamp is this run's terminal outcome, so a later run still
+    // streaming does not turn it back into pending.
+    streamService.isConversationStreaming.mockResolvedValue(true);
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'run'),
+    ).resolves.toEqual({ status: 'stopped' });
+    expect(streamService.isConversationStreaming).not.toHaveBeenCalled();
+  });
+
+  it('keeps a superseded turn superseded even when its run was stopped', async () => {
+    const input = {
+      id: 'superseded-input',
+      parentId: undefined,
+      message: { role: OpenAIMessageRole.USER, content: 'question' },
+      status: MessageStatus.SUCCESS,
+      attrs: { turn_run_id: 'run' },
+    };
+    const stoppedAnswer = {
+      id: 'superseded-answer',
+      parentId: 'superseded-input',
+      message: { role: OpenAIMessageRole.ASSISTANT, content: '' },
+      status: MessageStatus.STOPPED,
+      attrs: { turn_run_id: 'run', stopped_runs: ['run'] },
+    };
+    const next = {
+      id: 'next-question',
+      parentId: 'superseded-answer',
+      message: { role: OpenAIMessageRole.USER, content: 'next' },
+      status: MessageStatus.SUCCESS,
+      attrs: { turn_run_id: 'run' },
+    };
+    messagesService.findSubmitted
+      .mockResolvedValueOnce(input)
+      .mockResolvedValue(next);
+    messagesService.findAll.mockResolvedValue([input, stoppedAnswer, next]);
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'run'),
+    ).resolves.toEqual({ status: 'superseded' });
+    // The folded steer's own input is stopped: the original ask is
+    // superseded, the steered ask is not.
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'run'),
+    ).resolves.toEqual({ status: 'stopped' });
   });
 
   it('creates a new conversation when parent_message_id is absent', async () => {
@@ -271,6 +510,52 @@ describe('OpenWizardService', () => {
       'explicit',
     );
   });
+
+  it.each(['before the reply', 'during the reply', 'after eos'])(
+    'returns a stopped response when Web cancels a bot ask %s',
+    async (phase) => {
+      conversationsService.create.mockResolvedValue({ id: 'conversation-new' });
+      const answer = [
+        { response_type: 'bos', role: 'assistant', id: 'answer-1' },
+        {
+          response_type: 'delta',
+          id: 'answer-1',
+          message: { content: 'Partial answer' },
+        },
+      ];
+      streamService.chat.mockResolvedValue([
+        ...(phase === 'before the reply' ? [] : answer),
+        ...(phase === 'after eos'
+          ? [{ response_type: 'eos', id: 'answer-1' }]
+          : []),
+        {
+          response_type: 'stopped',
+          id: phase === 'before the reply' ? undefined : 'answer-1',
+        },
+      ]);
+
+      await expect(
+        service.ask('user-1', 'namespace-1', 'request-1', {
+          query: 'hello',
+          tools: [],
+          source_channel: 'qq',
+        }),
+      ).resolves.toMatchObject({
+        conversation_id: 'conversation-new',
+        status: 'stopped',
+        messages:
+          phase === 'before the reply'
+            ? []
+            : [
+                {
+                  id: 'answer-1',
+                  role: 'assistant',
+                  message: { content: 'Partial answer' },
+                },
+              ],
+      });
+    },
+  );
 
   it('ignores metrics while preserving the complete answer', async () => {
     conversationsService.create.mockResolvedValue({ id: 'conversation-new' });

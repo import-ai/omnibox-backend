@@ -1,10 +1,13 @@
 import {
   Body,
   Controller,
+  Get,
   Headers,
+  HttpCode,
   HttpStatus,
   Param,
   Post,
+  Query,
   Sse,
   UploadedFile,
   UseInterceptors,
@@ -80,6 +83,59 @@ export class WizardController {
       userId,
       data,
       compressedHtml,
+    );
+  }
+
+  @Get('conversations/:conversationId/submissions')
+  getSubmissions(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('conversationId') conversationId: string,
+    @Query('id') id?: string,
+  ) {
+    return this.streamService.submissionStatus(
+      namespaceId,
+      conversationId,
+      userId,
+      id,
+    );
+  }
+
+  @Post('conversations/:conversationId/messages')
+  @HttpCode(HttpStatus.ACCEPTED)
+  submitMessage(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('conversationId') conversationId: string,
+    @Body() body: AgentRequestDto & { expected_run_id?: string },
+    @Headers('x-timezone') timeZone?: string,
+    @Headers('x-client-platform') clientPlatform?: string,
+  ) {
+    return this.streamService.submitConversationMessage(
+      namespaceId,
+      conversationId,
+      userId,
+      body,
+      timeZone,
+      false,
+      clientPlatform,
+    );
+  }
+
+  @Post('conversations/:conversationId/runs/:runId/messages')
+  async steer(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('conversationId') conversationId: string,
+    @Param('runId') runId: string,
+    @Body() body: AgentRequestDto,
+  ) {
+    return this.streamService.submitSteer(
+      namespaceId,
+      conversationId,
+      userId,
+      runId,
+      body,
     );
   }
 

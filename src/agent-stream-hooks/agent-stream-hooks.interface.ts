@@ -29,6 +29,8 @@ export interface AgentCreditPrice {
 
 export interface AgentStream {
   billing?: { edition: 'basic' | 'pro'; price?: AgentCreditPrice };
+  /** Late usage belongs to the stopped turn, whose reservation is already released on close. */
+  settledAfterStop?: boolean;
   namespaceId: string;
   streamId: string;
   /** Set when the stream was opened through a share link, not by a member. */

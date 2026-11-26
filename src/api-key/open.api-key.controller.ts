@@ -46,6 +46,10 @@ export class OpenAPIKeyController {
   @ApiResponse({ status: 200, description: 'API key deleted successfully' })
   @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
   async delete(@APIKey() apiKey: APIKeyEntity): Promise<void> {
-    return await this.apiKeyService.delete(apiKey.id);
+    // The bot replies to the user itself; notifying it again would send a
+    // second success message.
+    return await this.apiKeyService.delete(apiKey.id, {
+      notifyBoundApplications: false,
+    });
   }
 }

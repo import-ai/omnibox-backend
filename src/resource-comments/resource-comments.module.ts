@@ -16,6 +16,7 @@ import { InternalResourceCommentsController } from './internal.resource-comments
 import { ResourceCommentAnchorsService } from './resource-comment-anchors.service';
 import { ResourceCommentAttachmentsController } from './resource-comment-attachments.controller';
 import { ResourceCommentAttachmentsService } from './resource-comment-attachments.service';
+import { ResourceCommentOpenQueriesService } from './resource-comment-open-queries.service';
 import { ResourceCommentQueriesService } from './resource-comment-queries.service';
 import { ResourceCommentsController } from './resource-comments.controller';
 import { ResourceCommentsService } from './resource-comments.service';
@@ -43,12 +44,14 @@ import { ResourceCommentsService } from './resource-comments.service';
   providers: [
     ResourceCommentsService,
     ResourceCommentQueriesService,
+    ResourceCommentOpenQueriesService,
     ResourceCommentAnchorsService,
     ResourceCommentAttachmentsService,
     CommentAttachmentCleanupService,
   ],
   exports: [
     ResourceCommentQueriesService,
+    ResourceCommentOpenQueriesService,
     ResourceCommentsService,
     ResourceCommentAttachmentsService,
     ResourceCommentAnchorsService,

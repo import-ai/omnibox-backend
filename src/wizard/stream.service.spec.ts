@@ -5092,10 +5092,27 @@ describe('queue behavior attribution', () => {
         parentId: 'initial',
         answerTiming: answerTiming(),
       };
-      const handler = handlerOf(service);
+      const settle = jest.spyOn(service as any, 'settleSteeredTurn');
+      const sends: string[] = [];
+      const send = jest.fn((data: string) => {
+        sends.push(data);
+        return Promise.resolve();
+      });
+      const handler = behaviorContext.run(runBehavior, () =>
+        service.agentHandler('n', 'c', 'u', send, false, {
+          streamId: 'active-stream',
+        } as AgentStream),
+      );
+      const sessionSends: string[] = [];
       let rowId = 'assistant-2';
       if (source === 'stop') {
         rowId = 'assistant-9';
+        jest
+          .spyOn(service as any, 'sendSessionData')
+          .mockImplementation((_target: unknown, data: string) => {
+            sessionSends.push(data);
+            return Promise.resolve();
+          });
         context.pendingSteered = new Map([
           [
             steeredBehavior.action_id,
@@ -5197,6 +5214,25 @@ describe('queue behavior attribution', () => {
         expect(pending?.size ?? 0).toBe(0);
         expect(queue ?? []).toEqual([]);
         expect(context.assistantSteeredBehavior).toBeUndefined();
+      }
+      // Only the eos close wires an emitter into the settle; the newer-steer,
+      // done, error and stop paths pass none, so no settle delta can be sent.
+      expect(settle).toHaveBeenCalledTimes(1);
+      const settleOptions = settle.mock.calls[0][3] as {
+        emit?: (...args: unknown[]) => unknown;
+      };
+      if (source === 'eos') expect(typeof settleOptions.emit).toBe('function');
+      else expect(settleOptions.emit).toBeUndefined();
+      // The eos settle emits exactly one answer-timing delta. The error path
+      // also emits its own run-level failed timing delta, which is separate
+      // from the settle and pinned by the error-path tests.
+      if (source !== 'error') {
+        const settleDeltas = [...sends, ...sessionSends].filter((data) => {
+          const chunk = JSON.parse(data);
+          return chunk.response_type === 'delta' && chunk.attrs?.answer_timing;
+        });
+        if (source === 'eos') expect(settleDeltas).toHaveLength(1);
+        else expect(settleDeltas).toEqual([]);
       }
     },
   );

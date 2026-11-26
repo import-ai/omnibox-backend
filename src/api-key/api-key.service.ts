@@ -1,4 +1,5 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomBytes } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
@@ -18,16 +19,27 @@ import {
   APIKeyPermissionTarget,
   APIKeyPermissionType,
 } from 'omniboxd/api-key/api-key.entity';
+import { WECHAT_OA_APP_ID } from 'omniboxd/applications/app.constants';
 import { Applications } from 'omniboxd/applications/applications.entity';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { CurrentInfoService } from 'omniboxd/namespaces/current-info.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { getActiveTraceHeaders } from 'omniboxd/tracing/trace-headers';
 import { Repository } from 'typeorm';
+
+export interface DeleteAPIKeyOptions {
+  /** Notify bound applications (the WeChat official account) about the
+   * deletion. The bot's own unbind path turns this off: it replies to the
+   * user itself. */
+  notifyBoundApplications?: boolean;
+}
 
 @Injectable()
 export class APIKeyService {
+  private readonly logger = new Logger(APIKeyService.name);
+
   constructor(
     @InjectRepository(APIKey)
     private readonly apiKeyRepository: Repository<APIKey>,
@@ -37,6 +49,7 @@ export class APIKeyService {
     private readonly namespacesService: NamespacesService,
     private readonly currentInfoService: CurrentInfoService,
     private readonly i18n: I18nService,
+    private readonly configService: ConfigService,
   ) {}
 
   async create(createApiKeyDto: CreateAPIKeyDto): Promise<APIKeyResponseDto> {
@@ -200,7 +213,14 @@ export class APIKeyService {
     return await this.findOne(id);
   }
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, options: DeleteAPIKeyOptions = {}): Promise<void> {
+    // The assistant-management path soft-deletes the application row before
+    // this runs, so the bound official-account rows must include deleted ones.
+    const boundApplications = await this.applicationsRepository.find({
+      where: { apiKeyId: id, appId: WECHAT_OA_APP_ID },
+      withDeleted: true,
+    });
+
     // Directly delete all applications that reference this API key
     await this.applicationsRepository.softDelete({
       apiKeyId: id,
@@ -215,6 +235,65 @@ export class APIKeyService {
         'API_KEY_NOT_FOUND',
         HttpStatus.NOT_FOUND,
       );
+    }
+
+    if (options.notifyBoundApplications !== false) {
+      this.notifyWechatOaUnbound(boundApplications, id);
+    }
+  }
+
+  private notifyWechatOaUnbound(
+    applications: Applications[],
+    apiKeyId: string,
+  ): void {
+    const openids = [
+      ...new Set(
+        applications
+          .filter((application) => application.appId === WECHAT_OA_APP_ID)
+          .map((application) => application.attrs?.primary_key)
+          .filter(
+            (openid): openid is string =>
+              typeof openid === 'string' && openid.length > 0,
+          ),
+      ),
+    ];
+    if (openids.length === 0) {
+      return;
+    }
+    const baseUrl = this.configService
+      .get<string>('OBBOT_BASE_URL', '')
+      ?.replace(/\/+$/, '');
+    if (!baseUrl) {
+      this.logger.debug(
+        'OBBOT_BASE_URL is not configured; skipping the WeChat official account unbind notification',
+      );
+      return;
+    }
+
+    for (const openid of openids) {
+      void fetch(`${baseUrl}/api/v1/wechat_oa/unbound`, {
+        method: 'POST',
+        headers: {
+          ...getActiveTraceHeaders(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ openid, api_key_id: apiKeyId }),
+        signal: AbortSignal.timeout(5000),
+      })
+        .then((response) => {
+          if (!response.ok) {
+            this.logger.warn(
+              `WeChat official account unbind notification failed: HTTP ${response.status}`,
+            );
+          }
+        })
+        .catch((error: unknown) => {
+          this.logger.warn(
+            `WeChat official account unbind notification failed: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        });
     }
   }
 

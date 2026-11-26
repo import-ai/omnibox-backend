@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util';
+
 import {
   BadRequestException,
   ConflictException,
@@ -260,6 +262,14 @@ interface StreamSession {
   drainUsage?: boolean;
 }
 
+/** Ownership of a pending stream reservation; only the token holder releases it. */
+interface StreamReservation {
+  key?: string;
+  token?: string;
+  /** This request actually set the Redis active key and may release it. */
+  claimed?: boolean;
+}
+
 interface ChatClientTraceContext {
   platform?: string;
   clientVersion?: string;
@@ -301,6 +311,14 @@ export type StopStreamOutcome =
 export class StreamService implements OnModuleDestroy {
   private readonly logger = new Logger(StreamService.name);
   private readonly streamSessions = new Map<string, StreamSession>();
+  // No-lock decision resumes check-and-reserve the stream key synchronously
+  // before they overwrite the stored decisions, so two in-process resumes
+  // cannot both pass the busy check. Handed off when the session registers.
+  private readonly pendingStreamReservations = new Map<
+    string,
+    { token: string; reservedAt: number }
+  >();
+  private static readonly STREAM_RESERVATION_TTL_MS = 60_000;
   private readonly reportedChatErrors = new Map<string, number>();
   private redisClient: RedisClient | null = null;
   private redisSubscriber: RedisClient | null = null;
@@ -1691,54 +1709,103 @@ export class StreamService implements OnModuleDestroy {
     queryReceivedAt?: number,
     fingerprint?: string,
   ): Promise<Observable<MessageEvent>> {
-    const parentId = await this.resolveStreamParent(
-      namespaceId,
-      requestDto,
-      userId,
-      shareId,
-      parentMode,
-    );
-    let messages: Message[] = [];
-    if (parentId) {
-      const allMessages = await this.messagesService.findAll(
-        userId,
-        requestDto.conversation_id,
-      );
-      messages = this.getMessages(allMessages, parentId);
-    }
-
+    const reservation: StreamReservation = {};
     const key = getStreamKey(
       namespaceId,
       requestDto.conversation_id,
       userId,
       shareId,
     );
-    if (this.streamSessions.has(key)) {
-      throw new AppException(
-        this.i18n.t('system.errors.conversationBusy'),
-        'CONVERSATION_BUSY',
-        HttpStatus.CONFLICT,
+    let parentId: string | undefined;
+    try {
+      parentId = await this.resolveStreamParent(
+        namespaceId,
+        requestDto,
+        userId,
+        shareId,
+        parentMode,
+        reservation,
       );
+    } catch (error) {
+      // The parent resolution claimed the Redis active key before failing
+      // (including a rejection from the lock-release finally).
+      this.releaseStreamReservation(reservation);
+      this.releaseClaimedStreamState(key, Boolean(reservation.claimed));
+      throw error;
     }
+    try {
+      let messages: Message[] = [];
+      if (parentId) {
+        const allMessages = await this.messagesService.findAll(
+          userId,
+          requestDto.conversation_id,
+        );
+        messages = this.getMessages(allMessages, parentId);
+      }
 
-    const session = this.startAgentSession(
-      key,
-      namespaceId,
-      requestDto,
-      requestId,
-      mode,
-      userId,
-      shareId,
-      parentId,
-      messages,
-      chatOnly,
-      timeZone,
-      traceContext,
-      queryReceivedAt,
-      fingerprint,
-    );
-    return new Observable<MessageEvent>((subscriber) =>
-      this.attachSession(session, subscriber),
+      if (
+        this.streamSessions.has(key) ||
+        this.hasForeignStreamReservation(key, reservation)
+      ) {
+        throw new AppException(
+          this.i18n.t('system.errors.conversationBusy'),
+          'CONVERSATION_BUSY',
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      return new Observable<MessageEvent>((subscriber) => {
+        const started: { session?: StreamSession } = {};
+        try {
+          const session = this.startAgentSession(
+            key,
+            namespaceId,
+            requestDto,
+            requestId,
+            mode,
+            userId,
+            shareId,
+            parentId,
+            messages,
+            chatOnly,
+            timeZone,
+            traceContext,
+            queryReceivedAt,
+            fingerprint,
+            reservation,
+            started,
+          );
+          return this.attachSession(session, subscriber);
+        } catch (error) {
+          // A synchronous failure after registration must not wedge the
+          // conversation with a never-finished session or an active key.
+          if (
+            started.session &&
+            this.streamSessions.get(key) === started.session
+          )
+            this.streamSessions.delete(key);
+          this.releaseStreamReservation(reservation);
+          this.releaseClaimedStreamState(key, Boolean(reservation.claimed));
+          throw error;
+        }
+      });
+    } catch (error) {
+      // The request never reached a session (history read, busy, teardown
+      // before subscribe): do not leave the conversation reserved or active.
+      this.releaseStreamReservation(reservation);
+      this.releaseClaimedStreamState(key, Boolean(reservation.claimed));
+      throw error;
+    }
+  }
+
+  // resolveStreamParent claimed the Redis active key; a refusal before the
+  // session takes over must clear it, or later asks wait for its TTL. Only a
+  // request that actually set the key may delete it: a no-op claim during a
+  // Redis outage must not remove another request's claim after recovery.
+  private releaseClaimedStreamState(key: string, claimed: boolean) {
+    if (!claimed) return;
+    void this.cleanupRedisSession(key).catch((error) =>
+      this.logger.error({ error }),
     );
   }
 
@@ -1748,6 +1815,7 @@ export class StreamService implements OnModuleDestroy {
     userId: string,
     shareId: string,
     parentMode: 'latest' | 'explicit',
+    reservation?: StreamReservation,
   ): Promise<string | undefined> {
     const release = await this.acquireConversationLock(
       namespaceId,
@@ -1773,13 +1841,86 @@ export class StreamService implements OnModuleDestroy {
               )
             : null;
       if (!release && parentMode === 'explicit') {
-        await this.claimStreamActive(
-          namespaceId,
-          requestDto.conversation_id,
-          userId,
-          shareId,
-        );
-        return requestDto.parent_message_id;
+        // Without a conversation lock this path used to skip every check. Run
+        // the same guards the locked path runs: a text under an unapplied
+        // decision or a pending interrupt would otherwise be reused as the
+        // query and the new text dropped. Decisions additionally overwrite
+        // the stored values, or the request's rejection never reaches wizard.
+        const decisions = requestDto.tool_call?.decisions;
+        let parent = requestDto.parent_message_id
+          ? await this.messagesService.findOneInConversation(
+              requestDto.parent_message_id,
+              requestDto.conversation_id,
+              userId,
+            )
+          : null;
+        if (requestDto.parent_message_id && !parent) {
+          throw new AppException(
+            this.i18n.t('system.errors.parentConversationMismatch'),
+            'PARENT_CONVERSATION_MISMATCH',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+        // The explicit parent may be stale: follow the newest message below
+        // it like the locked path, so the guards run on the message the
+        // question really continues from. Decisions keep the raw parent.
+        if (parent && requestDto.follow_latest && !decisions?.length) {
+          parent = await this.followLatest(parent, requestDto, userId);
+        }
+        this.assertNoPendingInterrupt(parent, Boolean(decisions?.length));
+        if (decisions?.length) {
+          await this.assertInterruptOpen(
+            parent,
+            requestDto.conversation_id,
+            true,
+          );
+          await this.assertDecisionUnapplied(
+            parent,
+            requestDto.conversation_id,
+          );
+        }
+        // The overwrite must not happen unless this request can own the
+        // stream. Check and reserve synchronously, then release on any
+        // failure before startAgentSession hands the reservation over.
+        const decisionReservation = decisions?.length
+          ? this.reserveConversationStream(
+              namespaceId,
+              requestDto.conversation_id,
+              userId,
+              shareId,
+            )
+          : undefined;
+        if (reservation && decisionReservation) {
+          reservation.key = decisionReservation.key;
+          reservation.token = decisionReservation.token;
+        }
+        try {
+          if (decisions?.length) {
+            await this.overwriteDecisionDecisions(
+              namespaceId,
+              requestDto.conversation_id,
+              parent,
+              decisions,
+            );
+          } else {
+            await this.assertDecisionApplied(
+              parent,
+              requestDto.conversation_id,
+              userId,
+            );
+          }
+          const claimed = await this.claimStreamActive(
+            namespaceId,
+            requestDto.conversation_id,
+            userId,
+            shareId,
+          );
+          if (reservation) reservation.claimed = claimed;
+          return parent?.id;
+        } catch (error) {
+          this.releaseStreamReservation(decisionReservation);
+          throw error;
+        }
       }
       if (
         parentMode === 'explicit' &&
@@ -1808,22 +1949,76 @@ export class StreamService implements OnModuleDestroy {
         requestDto.conversation_id,
         Boolean(requestDto.tool_call?.decisions?.length),
       );
-      if (requestDto.tool_call?.decisions?.length) {
-        await this.assertDecisionUnapplied(parent, requestDto.conversation_id);
-      } else {
-        await this.assertDecisionApplied(
-          parent,
+      let decisionReservation: StreamReservation | undefined;
+      try {
+        if (requestDto.tool_call?.decisions?.length) {
+          await this.assertDecisionUnapplied(
+            parent,
+            requestDto.conversation_id,
+          );
+          if (release) {
+            this.assertConversationNotBusy(
+              namespaceId,
+              requestDto.conversation_id,
+              userId,
+              shareId,
+            );
+            // A no-lock request may still hold an in-process reservation for
+            // this conversation (e.g. Redis just recovered): do not write
+            // under it only to be refused at the post-check.
+            const reservedKey = getStreamKey(
+              namespaceId,
+              requestDto.conversation_id,
+              userId,
+              shareId,
+            );
+            if (this.hasForeignStreamReservation(reservedKey, reservation)) {
+              throw new AppException(
+                this.i18n.t('system.errors.conversationBusy'),
+                'CONVERSATION_BUSY',
+                HttpStatus.CONFLICT,
+              );
+            }
+          } else {
+            // No lock (no Redis or a failed connect) with parentMode
+            // 'latest': the decision write needs the same reservation as the
+            // no-lock explicit branch.
+            decisionReservation = this.reserveConversationStream(
+              namespaceId,
+              requestDto.conversation_id,
+              userId,
+              shareId,
+            );
+            if (reservation && decisionReservation) {
+              reservation.key = decisionReservation.key;
+              reservation.token = decisionReservation.token;
+            }
+          }
+          await this.overwriteDecisionDecisions(
+            namespaceId,
+            requestDto.conversation_id,
+            parent,
+            requestDto.tool_call.decisions,
+          );
+        } else {
+          await this.assertDecisionApplied(
+            parent,
+            requestDto.conversation_id,
+            userId,
+          );
+        }
+        const claimed = await this.claimStreamActive(
+          namespaceId,
           requestDto.conversation_id,
           userId,
+          shareId,
         );
+        if (reservation) reservation.claimed = claimed;
+        return parent?.id;
+      } catch (error) {
+        this.releaseStreamReservation(decisionReservation);
+        throw error;
       }
-      await this.claimStreamActive(
-        namespaceId,
-        requestDto.conversation_id,
-        userId,
-        shareId,
-      );
-      return parent?.id;
     } finally {
       await release?.();
     }
@@ -1956,6 +2151,132 @@ export class StreamService implements OnModuleDestroy {
       HttpStatus.CONFLICT,
       { message_id: parent.id },
     );
+  }
+
+  // A decision accepted but not applied yet takes the decisions of the
+  // request that resumes it: the client may reject a call another client
+  // approved, and the stored decisions would otherwise run again (an
+  // approval could execute its tool). Later requests win while D is
+  // unapplied; applied decisions are refused before this runs.
+  private async overwriteDecisionDecisions(
+    namespaceId: string,
+    conversationId: string,
+    parent: Message | null | undefined,
+    decisions: Record<string, any>[],
+  ): Promise<void> {
+    const currentAttrs = parent?.attrs;
+    const currentToolCall = currentAttrs?.tool_call;
+    if (
+      !parent ||
+      parent.message.role !== OpenAIMessageRole.USER ||
+      !currentAttrs ||
+      !currentToolCall?.decisions?.length
+    )
+      return;
+    // A wrong count would make the stored decisions unusable for every later
+    // resume, so refuse it instead of writing it.
+    if (currentToolCall.decisions.length !== decisions.length) {
+      throw new AppException(
+        this.i18n.t('system.errors.invalidDecisions'),
+        'INVALID_DECISIONS',
+        HttpStatus.BAD_REQUEST,
+        { message_id: parent.id },
+      );
+    }
+    if (isDeepStrictEqual(currentToolCall.decisions, decisions)) return;
+    const attrs = {
+      ...currentAttrs,
+      tool_call: { ...currentToolCall, decisions },
+    };
+    const saved = await this.messagesService.update(
+      parent.id,
+      namespaceId,
+      conversationId,
+      { attrs },
+      false,
+    );
+    parent.attrs = saved?.attrs ?? attrs;
+  }
+
+  // The in-memory session check in createAgentStream runs after the parent
+  // guards; a decision resume writes the stored decisions before reaching it.
+  // Refuse a busy conversation before that write, so a stale session cannot
+  // leave the stored decisions changed for a request that was refused.
+  private assertConversationNotBusy(
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+    shareId: string,
+  ) {
+    const key = getStreamKey(namespaceId, conversationId, userId, shareId);
+    if (this.streamSessions.has(key)) {
+      throw new AppException(
+        this.i18n.t('system.errors.conversationBusy'),
+        'CONVERSATION_BUSY',
+        HttpStatus.CONFLICT,
+      );
+    }
+  }
+
+  // Synchronous check-and-reserve for the no-lock decision write. A
+  // reservation older than the TTL is stale (the observable was never
+  // subscribed, or a teardown raced the session start). The returned token
+  // identifies the owner; a stale owner's release is a no-op.
+  private reserveConversationStream(
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+    shareId: string,
+  ): StreamReservation {
+    const key = getStreamKey(namespaceId, conversationId, userId, shareId);
+    const now = Date.now();
+    for (const [pendingKey, pending] of this.pendingStreamReservations) {
+      if (now - pending.reservedAt > StreamService.STREAM_RESERVATION_TTL_MS) {
+        this.pendingStreamReservations.delete(pendingKey);
+      }
+    }
+    if (
+      this.streamSessions.has(key) ||
+      this.pendingStreamReservations.has(key)
+    ) {
+      throw new AppException(
+        this.i18n.t('system.errors.conversationBusy'),
+        'CONVERSATION_BUSY',
+        HttpStatus.CONFLICT,
+      );
+    }
+    const token = randomUUID();
+    this.pendingStreamReservations.set(key, { token, reservedAt: now });
+    return { key, token };
+  }
+
+  private releaseStreamReservation(reservation?: StreamReservation) {
+    const key = reservation?.key;
+    if (!key) return;
+    const pending = this.pendingStreamReservations.get(key);
+    if (pending?.token === reservation.token) {
+      this.pendingStreamReservations.delete(key);
+    }
+    reservation.key = undefined;
+    reservation.token = undefined;
+  }
+
+  private hasForeignStreamReservation(
+    key: string,
+    reservation?: StreamReservation,
+  ): boolean {
+    const pending = this.pendingStreamReservations.get(key);
+    if (!pending) return false;
+    if (
+      Date.now() - pending.reservedAt >
+      StreamService.STREAM_RESERVATION_TTL_MS
+    ) {
+      // Never-subscribed reservations must not block text or locked starts
+      // forever.
+      this.pendingStreamReservations.delete(key);
+      return false;
+    }
+    return pending.token !== reservation?.token;
   }
 
   // A new question may not continue from a decision that was accepted but
@@ -2163,6 +2484,8 @@ export class StreamService implements OnModuleDestroy {
     traceContext: ChatClientTraceContext = {},
     queryReceivedAt?: number,
     fingerprint?: string,
+    reservation?: StreamReservation,
+    started?: { session?: StreamSession },
   ): StreamSession {
     requestId = requestId?.trim() || randomUUID();
     const session: StreamSession = {
@@ -2190,7 +2513,31 @@ export class StreamService implements OnModuleDestroy {
       },
       finished: false,
     };
+    // The caller checked before its last await; a same-key request can
+    // reserve or register in between. Check and register atomically here, or
+    // two subscriptions can both pass the caller's check and start.
+    if (
+      this.streamSessions.has(key) ||
+      this.hasForeignStreamReservation(key, reservation)
+    ) {
+      throw new AppException(
+        this.i18n.t('system.errors.conversationBusy'),
+        'CONVERSATION_BUSY',
+        HttpStatus.CONFLICT,
+      );
+    }
     this.streamSessions.set(key, session);
+    if (started) started.session = session;
+    // Only the request that owns the reservation token hands it over; a
+    // concurrent same-key request or a stale owner must not clear it.
+    if (reservation?.key === key && reservation.token) {
+      const pending = this.pendingStreamReservations.get(key);
+      if (pending?.token === reservation.token) {
+        this.pendingStreamReservations.delete(key);
+      }
+      reservation.key = undefined;
+      reservation.token = undefined;
+    }
 
     const agentStream = agentStreamOf(session);
     const handler = this.agentHandler(
@@ -2498,9 +2845,9 @@ export class StreamService implements OnModuleDestroy {
     conversationId: string,
     userId: string,
     shareId: string,
-  ) {
+  ): Promise<boolean> {
     const client = await this.getRedisClient();
-    if (!client) return;
+    if (!client) return false;
     const key = getStreamKey(namespaceId, conversationId, userId, shareId);
     await client.del([
       this.streamEventsKey(key),
@@ -2510,6 +2857,7 @@ export class StreamService implements OnModuleDestroy {
     await client.set(this.streamActiveKey(key), '1', {
       EX: STREAM_TTL_SECONDS,
     });
+    return true;
   }
 
   private async startRedisSession(session: StreamSession) {
@@ -2638,7 +2986,8 @@ export class StreamService implements OnModuleDestroy {
       }
     }
     session.subscribers.clear();
-    this.streamSessions.delete(session.key);
+    if (this.streamSessions.get(session.key) === session)
+      this.streamSessions.delete(session.key);
     void this.cleanupRedisSession(session.key).catch((error) =>
       this.logger.error({ error }),
     );

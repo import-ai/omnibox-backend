@@ -1100,6 +1100,7 @@ describe('StreamService parent resolution', () => {
         message: { role: 'assistant' },
         attrs: { tool_call: { interrupts: [{ id: 'call-1' }] } },
       }),
+      hasChildren: jest.fn().mockResolvedValue(false),
     };
     const service = serviceWith(messagesService);
 
@@ -1165,6 +1166,7 @@ describe('StreamService parent resolution', () => {
     const messagesService = {
       findOneInConversation: jest.fn().mockResolvedValue(interruptMessage),
       hasChildren: jest.fn().mockResolvedValue(false),
+      update: jest.fn(),
     };
     const service = lockedServiceWith(messagesService);
 
@@ -1181,6 +1183,7 @@ describe('StreamService parent resolution', () => {
       'interrupt-id',
       'conversation-id',
     );
+    expect(messagesService.update).not.toHaveBeenCalled();
   });
 
   it('refuses to decide an interrupt that already has a reply', async () => {
@@ -1301,9 +1304,11 @@ describe('StreamService parent resolution', () => {
     });
 
     it('refuses to resume a decision that already has a tool result', async () => {
+      const update = jest.fn();
       const service = serviceWithMessages({
         findOneInConversation: jest.fn().mockResolvedValue(decision),
         findChildren: jest.fn().mockResolvedValue([toolResult]),
+        update,
       });
 
       const error = await resolve(service, decisionsUnder('decision-d')).catch(
@@ -1314,12 +1319,24 @@ describe('StreamService parent resolution', () => {
         code: 'interrupt_already_decided',
         message_id: 'decision-d',
       });
+      expect(update).not.toHaveBeenCalled();
     });
 
     it('resumes again a decision whose resume only left a failed reply', async () => {
+      const stored = {
+        ...decision,
+        attrs: {
+          tool_call: {
+            decisions: [{ type: 'reject' }],
+          },
+        },
+      };
       const service = serviceWithMessages({
-        findOneInConversation: jest.fn().mockResolvedValue(decision),
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
         findChildren: jest.fn().mockResolvedValue([failedReply]),
+        update: jest.fn((_id, _namespaceId, _conversationId, dto) =>
+          Promise.resolve({ ...stored, attrs: dto.attrs }),
+        ),
       });
 
       await expect(
@@ -1381,9 +1398,11 @@ describe('StreamService parent resolution', () => {
     ] as const)(
       'refuses a question (%s parent %j) under a decision that was not applied',
       async (mode, body, lookups) => {
+        const update = jest.fn();
         const service = serviceWithMessages({
           findOneInConversation: jest.fn().mockResolvedValue(decision),
           findChildren: jest.fn().mockResolvedValue([failedReply]),
+          update,
           ...lookups,
         });
 
@@ -1396,6 +1415,7 @@ describe('StreamService parent resolution', () => {
           message_id: 'decision-d',
           interrupt_count: 2,
         });
+        expect(update).not.toHaveBeenCalled();
       },
     );
 
@@ -1420,6 +1440,1360 @@ describe('StreamService parent resolution', () => {
       });
 
       await expect(resolve(service, {}, 'latest')).resolves.toBe('failed-f');
+    });
+
+    const rejectDecisions = [
+      {
+        type: 'reject',
+        message: '用户没有批准这个操作，而是发送了新的消息，请不要重试该操作。',
+        end_turn: true,
+      },
+      {
+        type: 'reject',
+        message: '用户没有批准这个操作，而是发送了新的消息，请不要重试该操作。',
+        end_turn: true,
+      },
+    ];
+
+    function storedDecision(decisions: object[]) {
+      return {
+        id: 'decision-d',
+        parentId: 'interrupt-id',
+        conversationId: 'conversation-id',
+        message: { role: 'user', content: '' },
+        attrs: {
+          composer: { content: '' },
+          context: { edition: 'pro' },
+          tool_call: { decisions },
+        },
+      };
+    }
+
+    it('overwrites the stored decisions of a decision that was not applied', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn(
+        (_id: string, _namespaceId: string, _conversationId: string, dto) =>
+          Promise.resolve({ ...stored, attrs: dto.attrs }),
+      );
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+
+      expect(update).toHaveBeenCalledWith(
+        'decision-d',
+        'namespace-id',
+        'conversation-id',
+        {
+          attrs: {
+            composer: { content: '' },
+            context: { edition: 'pro' },
+            tool_call: { decisions: rejectDecisions },
+          },
+        },
+        false,
+      );
+    });
+
+    it('refuses a decision whose stored decision count does not match the request', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn();
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: [{ type: 'reject', end_turn: true }] },
+      }).catch((e: unknown) => e);
+
+      expect(error).toMatchObject({ code: 'INVALID_DECISIONS' });
+      expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+      expect(error.getResponse()).toMatchObject({
+        code: 'invalid_decisions',
+        message_id: 'decision-d',
+      });
+      expect(update).not.toHaveBeenCalled();
+      expect(stored.attrs.tool_call.decisions).toEqual([
+        { type: 'approve' },
+        { type: 'approve' },
+      ]);
+    });
+
+    function unlockedServiceWith(messagesService: Record<string, jest.Mock>) {
+      const service = createService({ messagesService });
+      jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+      return service;
+    }
+
+    it('applies the request decisions without a conversation lock', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn(
+        (_id: string, _namespaceId: string, _conversationId: string, dto) =>
+          Promise.resolve({ ...stored, attrs: dto.attrs }),
+      );
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+
+      expect(update).toHaveBeenCalledTimes(1);
+      expect(update).toHaveBeenCalledWith(
+        'decision-d',
+        'namespace-id',
+        'conversation-id',
+        {
+          attrs: {
+            composer: { content: '' },
+            context: { edition: 'pro' },
+            tool_call: { decisions: rejectDecisions },
+          },
+        },
+        false,
+      );
+    });
+
+    it('runs the question guards without a conversation lock and does not write', async () => {
+      const findOneInConversation = jest.fn().mockResolvedValue({
+        id: 'answer-1',
+        message: { role: 'assistant' },
+        attrs: {},
+      });
+      const update = jest.fn();
+      const service = unlockedServiceWith({ findOneInConversation, update });
+
+      await expect(
+        resolve(service, { parent_message_id: 'answer-1', query: 'hello' }),
+      ).resolves.toBe('answer-1');
+
+      expect(findOneInConversation).toHaveBeenCalledWith(
+        'answer-1',
+        'conversation-id',
+        'user-id',
+      );
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('refuses text under an unapplied decision without a conversation lock', async () => {
+      const create = jest.fn();
+      const update = jest.fn();
+      const service = unlockedServiceWith({
+        findOneInConversation: jest
+          .fn()
+          .mockResolvedValue(storedDecision(rejectDecisions)),
+        findChildren: jest.fn().mockResolvedValue([]),
+        create,
+        update,
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'decision-d',
+        query: 'more text',
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'decision_not_applied',
+        message_id: 'decision-d',
+      });
+      expect(create).not.toHaveBeenCalled();
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('refuses text under a failed empty reply of an unapplied decision', async () => {
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn((id: string) =>
+          Promise.resolve(id === 'failed-f' ? failedReply : decision),
+        ),
+        findChildren: jest.fn().mockResolvedValue([]),
+        create: jest.fn(),
+        update: jest.fn(),
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'failed-f',
+        query: 'more text',
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'decision_not_applied',
+        message_id: 'decision-d',
+      });
+    });
+
+    it('refuses text under a pending interrupt without a conversation lock', async () => {
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(interruptMessage),
+        create: jest.fn(),
+        update: jest.fn(),
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'interrupt-id',
+        query: 'more text',
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'pending_interrupt',
+        message_id: 'interrupt-id',
+      });
+    });
+
+    it('rejects a question whose parent cannot be loaded without a lock', async () => {
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(null),
+        update: jest.fn(),
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'missing',
+        query: 'hello',
+      }).catch((e: unknown) => e);
+
+      expect(error).toMatchObject({ code: 'PARENT_CONVERSATION_MISMATCH' });
+    });
+
+    it('follows the newest message below a stale parent without a lock', async () => {
+      const raw = { id: 'question-1', message: { role: 'user' }, attrs: {} };
+      const leaf = {
+        id: 'answer-2',
+        message: { role: 'assistant', content: '' },
+        status: 'streaming',
+        attrs: {},
+      };
+      const create = jest.fn();
+      const update = jest.fn();
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findLeafBelow: jest.fn().mockResolvedValue(leaf),
+        create,
+        update,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'question-1',
+          follow_latest: true,
+          query: 'more text',
+        }),
+      ).resolves.toBe('answer-2');
+
+      expect(create).not.toHaveBeenCalled();
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('keeps the raw parent when nothing sits below it without a lock', async () => {
+      const raw = {
+        id: 'answer-1',
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findLeafBelow: jest.fn().mockResolvedValue(null),
+        create: jest.fn(),
+        update: jest.fn(),
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'answer-1',
+          follow_latest: true,
+          query: 'more text',
+        }),
+      ).resolves.toBe('answer-1');
+    });
+
+    it('refuses a followed leaf that is an unapplied decision without a lock', async () => {
+      const raw = { id: 'answer-1', message: { role: 'assistant' }, attrs: {} };
+      const create = jest.fn();
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findLeafBelow: jest.fn().mockResolvedValue(decision),
+        findChildren: jest.fn().mockResolvedValue([]),
+        create,
+        update: jest.fn(),
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'answer-1',
+        follow_latest: true,
+        query: 'more text',
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'decision_not_applied',
+        message_id: 'decision-d',
+      });
+      expect(create).not.toHaveBeenCalled();
+    });
+
+    it('ignores follow_latest for a decision resume without a lock', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const findLeafBelow = jest.fn();
+      const update = jest.fn(
+        (_id: string, _namespaceId: string, _conversationId: string, dto) =>
+          Promise.resolve({ ...stored, attrs: dto.attrs }),
+      );
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        findLeafBelow,
+        update,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          follow_latest: true,
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+
+      expect(findLeafBelow).not.toHaveBeenCalled();
+      expect(update).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses a decision resume while the conversation is streaming without a lock', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn();
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+      (service as any).streamSessions.set(
+        'user:user-id:namespace-id:conversation-id',
+        { finished: false },
+      );
+
+      const error = await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({ code: 'conversation_busy' });
+      expect(error.getStatus()).toBe(HttpStatus.CONFLICT);
+      expect(update).not.toHaveBeenCalled();
+      expect(stored.attrs.tool_call.decisions).toEqual([
+        { type: 'approve' },
+        { type: 'approve' },
+      ]);
+    });
+
+    it('reserves the stream while a no-lock decision write is in flight', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      let releaseUpdate!: () => void;
+      const update = jest.fn(
+        () =>
+          new Promise((resolve) => {
+            releaseUpdate = () =>
+              resolve({
+                ...stored,
+                attrs: {
+                  ...stored.attrs,
+                  tool_call: { decisions: rejectDecisions },
+                },
+              });
+          }),
+      );
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      const first = resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      });
+      await new Promise((done) => setImmediate(done));
+      expect(update).toHaveBeenCalledTimes(1);
+
+      const second = await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(second.getResponse()).toMatchObject({ code: 'conversation_busy' });
+      expect(update).toHaveBeenCalledTimes(1);
+
+      releaseUpdate();
+      await expect(first).resolves.toBe('decision-d');
+      expect(update).toHaveBeenCalledTimes(1);
+    });
+
+    it('releases the reservation when the no-lock decision write fails', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest
+        .fn()
+        .mockRejectedValueOnce(new Error('db down'))
+        .mockResolvedValue({
+          ...stored,
+          attrs: { ...stored.attrs, tool_call: { decisions: rejectDecisions } },
+        });
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).rejects.toThrow('db down');
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+      expect(update).toHaveBeenCalledTimes(2);
+    });
+
+    it('ignores an expired stream reservation', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn().mockResolvedValue({
+        ...stored,
+        attrs: { ...stored.attrs, tool_call: { decisions: rejectDecisions } },
+      });
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+      (service as any).pendingStreamReservations.set(
+        'user:user-id:namespace-id:conversation-id',
+        { token: 'stale-owner', reservedAt: Date.now() - 120_000 },
+      );
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+      expect(update).toHaveBeenCalledTimes(1);
+    });
+
+    it('reserves a no-lock latest decision resume', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      let releaseUpdate!: () => void;
+      const update = jest.fn(
+        () =>
+          new Promise((resolve) => {
+            releaseUpdate = () =>
+              resolve({
+                ...stored,
+                attrs: {
+                  ...stored.attrs,
+                  tool_call: { decisions: rejectDecisions },
+                },
+              });
+          }),
+      );
+      const service = unlockedServiceWith({
+        findLatest: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      const first = resolve(
+        service,
+        { tool_call: { decisions: rejectDecisions } },
+        'latest',
+      );
+      await new Promise((done) => setImmediate(done));
+      expect(update).toHaveBeenCalledTimes(1);
+
+      const second = await resolve(
+        service,
+        { tool_call: { decisions: rejectDecisions } },
+        'latest',
+      ).catch((e: unknown) => e);
+      expect(second.getResponse()).toMatchObject({ code: 'conversation_busy' });
+      expect(update).toHaveBeenCalledTimes(1);
+
+      releaseUpdate();
+      await expect(first).resolves.toBe('decision-d');
+    });
+
+    it('keeps the conversation usable after a synchronous stream start failure', async () => {
+      const stored = { ...storedDecision(rejectDecisions), parentId: null };
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        findAll: jest.fn().mockResolvedValue([stored]),
+        update: jest.fn(),
+      });
+
+      const observable = await (service as any).createAgentStream(
+        'namespace-id',
+        {
+          conversation_id: 'conversation-id',
+          query: '',
+          parent_message_id: 'decision-d',
+          tools: { broken: true },
+          channel: 'mobile',
+          tool_call: { decisions: rejectDecisions },
+        },
+        'request-id',
+        'ask',
+        'user-id',
+      );
+      let error: unknown;
+      await new Promise<void>((resolve) => {
+        observable.subscribe({
+          complete: resolve,
+          error: (failure: unknown) => {
+            error = failure;
+            resolve();
+          },
+        });
+      });
+
+      expect(error).toBeInstanceOf(TypeError);
+      expect((service as any).streamSessions.size).toBe(0);
+      expect((service as any).pendingStreamReservations.size).toBe(0);
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+    });
+
+    it('clears the claimed stream key when the start fails synchronously', async () => {
+      const stored = { ...storedDecision(rejectDecisions), parentId: null };
+      const del = jest.fn().mockResolvedValue(1);
+      const set = jest.fn().mockResolvedValue('OK');
+      const service = createService({});
+      (service as any).messagesService = {
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        findAll: jest.fn().mockResolvedValue([stored]),
+        update: jest.fn(),
+      };
+      jest
+        .spyOn(service, 'acquireConversationLock')
+        .mockResolvedValue(jest.fn().mockResolvedValue(undefined));
+      (service as any).redisClient = { isOpen: true, del, set };
+
+      const observable = await (service as any).createAgentStream(
+        'namespace-id',
+        {
+          conversation_id: 'conversation-id',
+          query: '',
+          parent_message_id: 'decision-d',
+          tools: { broken: true },
+          channel: 'mobile',
+          tool_call: { decisions: rejectDecisions },
+        },
+        'request-id',
+        'ask',
+        'user-id',
+      );
+      let error: unknown;
+      await new Promise<void>((resolve) => {
+        observable.subscribe({
+          complete: resolve,
+          error: (failure: unknown) => {
+            error = failure;
+            resolve();
+          },
+        });
+      });
+      await new Promise((done) => setImmediate(done));
+
+      expect(error).toBeInstanceOf(TypeError);
+      expect(set).toHaveBeenCalledWith(
+        'wizard:stream:user:user-id:namespace-id:conversation-id:active',
+        '1',
+        { EX: expect.any(Number) },
+      );
+      expect(del).toHaveBeenCalledWith(
+        'wizard:stream:user:user-id:namespace-id:conversation-id:active',
+      );
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+    });
+
+    it('clears the claimed stream key when the post-check refuses', async () => {
+      const raw = {
+        id: 'answer-1',
+        parentId: null,
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      const del = jest.fn().mockResolvedValue(1);
+      const set = jest.fn().mockResolvedValue('OK');
+      const service = createService({});
+      (service as any).messagesService = {
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findAll: jest.fn().mockResolvedValue([raw]),
+        create: jest.fn(),
+      };
+      jest
+        .spyOn(service, 'acquireConversationLock')
+        .mockResolvedValue(jest.fn().mockResolvedValue(undefined));
+      (service as any).redisClient = { isOpen: true, del, set };
+      (service as any).streamSessions.set(
+        'user:user-id:namespace-id:conversation-id',
+        { finished: false },
+      );
+
+      await expect(
+        (service as any).createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: 'text',
+            parent_message_id: 'answer-1',
+            tools: [],
+            channel: 'mobile',
+          },
+          'request-id',
+          'ask',
+          'user-id',
+        ),
+      ).rejects.toMatchObject({ code: 'CONVERSATION_BUSY' });
+      await new Promise((done) => setImmediate(done));
+
+      expect(del).toHaveBeenCalledWith(
+        'wizard:stream:user:user-id:namespace-id:conversation-id:active',
+      );
+    });
+
+    it('refuses a same-key text start while a decision write is reserved', async () => {
+      const key = 'user:user-id:namespace-id:conversation-id';
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      let releaseUpdate!: () => void;
+      const update = jest.fn(
+        () =>
+          new Promise((resolve) => {
+            releaseUpdate = () =>
+              resolve({
+                ...stored,
+                attrs: {
+                  ...stored.attrs,
+                  tool_call: { decisions: rejectDecisions },
+                },
+              });
+          }),
+      );
+      const raw = {
+        id: 'answer-1',
+        parentId: null,
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn((id: string) =>
+          Promise.resolve(id === 'decision-d' ? stored : raw),
+        ),
+        findChildren: jest.fn().mockResolvedValue([]),
+        findAll: jest.fn().mockResolvedValue([raw]),
+        create: jest.fn(),
+        update,
+      });
+
+      const first = resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      });
+      await new Promise((done) => setImmediate(done));
+      expect(update).toHaveBeenCalledTimes(1);
+      expect((service as any).pendingStreamReservations.has(key)).toBe(true);
+
+      await expect(
+        (service as any).createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: 'text',
+            parent_message_id: 'answer-1',
+            tools: [],
+            channel: 'mobile',
+          },
+          'request-text',
+          'ask',
+          'user-id',
+        ),
+      ).rejects.toMatchObject({ code: 'CONVERSATION_BUSY' });
+      expect((service as any).streamSessions.size).toBe(0);
+
+      releaseUpdate();
+      await expect(first).resolves.toBe('decision-d');
+      expect(update).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses a prepared text start once a decision resume holds the reservation', async () => {
+      const key = 'user:user-id:namespace-id:conversation-id';
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const interrupt = {
+        id: 'interrupt-id',
+        parentId: null,
+        message: { role: 'assistant', content: 'ask' },
+        attrs: {},
+      };
+      const raw = {
+        id: 'answer-1',
+        parentId: null,
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      const update = jest.fn(
+        (
+          _id: string,
+          _namespaceId: string,
+          _conversationId: string,
+          dto: { attrs: object },
+        ) => Promise.resolve({ ...stored, attrs: dto.attrs }),
+      );
+      const wizardStream = jest.fn<Promise<Response>, unknown[]>(
+        () => new Promise<Response>(() => {}),
+      );
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn((id: string) =>
+          Promise.resolve(id === 'decision-d' ? stored : raw),
+        ),
+        findChildren: jest.fn().mockResolvedValue([]),
+        findAll: jest.fn().mockResolvedValue([raw, interrupt, stored]),
+        update,
+        create: jest.fn().mockResolvedValue({
+          id: 'question-1',
+          parentId: 'answer-1',
+          status: 'success',
+          message: { role: 'user', content: 'text' },
+          attrs: {},
+          createdAt: new Date(),
+        }),
+      });
+      jest
+        .spyOn(service as any, 'agentHandler')
+        .mockReturnValue(jest.fn().mockResolvedValue(undefined));
+      (service as any).wizardApiService = {
+        resolveAgentTarget: jest
+          .fn()
+          .mockResolvedValue({ baseUrl: 'http://wizard-pro', target: 'pro' }),
+        createAgentStream: wizardStream,
+      };
+
+      // Both requests pass the preparation check; neither has subscribed yet.
+      const text = await (service as any).createAgentStream(
+        'namespace-id',
+        {
+          conversation_id: 'conversation-id',
+          query: 'text',
+          parent_message_id: 'answer-1',
+          tools: [],
+          channel: 'mobile',
+        },
+        'request-text',
+        'ask',
+        'user-id',
+      );
+      const decision = await (service as any).createAgentStream(
+        'namespace-id',
+        {
+          conversation_id: 'conversation-id',
+          query: '',
+          parent_message_id: 'decision-d',
+          tools: [],
+          channel: 'mobile',
+          tool_call: { decisions: rejectDecisions },
+        },
+        'request-decision',
+        'ask',
+        'user-id',
+      );
+      expect((service as any).pendingStreamReservations.has(key)).toBe(true);
+
+      const failures: unknown[] = [];
+      text.subscribe({ error: (error: unknown) => failures.push(error) });
+      expect(failures).toHaveLength(1);
+      expect((failures[0] as AppException).getResponse()).toMatchObject({
+        code: 'conversation_busy',
+      });
+      expect((service as any).streamSessions.size).toBe(0);
+      expect((service as any).pendingStreamReservations.has(key)).toBe(true);
+
+      decision.subscribe({});
+      expect((service as any).streamSessions.has(key)).toBe(true);
+      expect((service as any).pendingStreamReservations.has(key)).toBe(false);
+      expect(update).toHaveBeenCalledTimes(1);
+
+      await new Promise((done) => setImmediate(done));
+      expect(wizardStream).toHaveBeenCalledTimes(1);
+      expect(wizardStream.mock.calls[0][2]).toMatchObject({
+        tool_call: { decisions: rejectDecisions },
+      });
+    });
+
+    it('registers only the first of two prepared text starts', async () => {
+      const key = 'user:user-id:namespace-id:conversation-id';
+      const raw = {
+        id: 'answer-1',
+        parentId: null,
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      const wizardStream = jest.fn<Promise<Response>, unknown[]>(
+        () => new Promise<Response>(() => {}),
+      );
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findAll: jest.fn().mockResolvedValue([raw]),
+        create: jest.fn().mockImplementation((...args: unknown[]) => {
+          const body = args[3] as { message: { content: string } };
+          return Promise.resolve({
+            id: `question-${body.message.content}`,
+            parentId: 'answer-1',
+            status: 'success',
+            message: { role: 'user', content: body.message.content },
+            attrs: {},
+            createdAt: new Date(),
+          });
+        }),
+      });
+      jest
+        .spyOn(service as any, 'agentHandler')
+        .mockReturnValue(jest.fn().mockResolvedValue(undefined));
+      (service as any).wizardApiService = {
+        resolveAgentTarget: jest
+          .fn()
+          .mockResolvedValue({ baseUrl: 'http://wizard-pro', target: 'pro' }),
+        createAgentStream: wizardStream,
+      };
+
+      const first = await (service as any).createAgentStream(
+        'namespace-id',
+        {
+          conversation_id: 'conversation-id',
+          query: 'one',
+          parent_message_id: 'answer-1',
+          tools: [],
+          channel: 'mobile',
+        },
+        'request-1',
+        'ask',
+        'user-id',
+      );
+      const second = await (service as any).createAgentStream(
+        'namespace-id',
+        {
+          conversation_id: 'conversation-id',
+          query: 'two',
+          parent_message_id: 'answer-1',
+          tools: [],
+          channel: 'mobile',
+        },
+        'request-2',
+        'ask',
+        'user-id',
+      );
+
+      const failures: unknown[] = [];
+      first.subscribe({ error: (error: unknown) => failures.push(error) });
+      second.subscribe({ error: (error: unknown) => failures.push(error) });
+      expect(failures).toHaveLength(1);
+      expect((failures[0] as AppException).getResponse()).toMatchObject({
+        code: 'conversation_busy',
+      });
+      expect((service as any).streamSessions.has(key)).toBe(true);
+      expect((service as any).streamSessions.size).toBe(1);
+
+      await new Promise((done) => setImmediate(done));
+      expect(wizardStream).toHaveBeenCalledTimes(1);
+      expect(wizardStream.mock.calls[0][2]).toMatchObject({ query: 'one' });
+    });
+
+    it('does not release a newer reservation with a stale owner token', async () => {
+      const key = 'user:user-id:namespace-id:conversation-id';
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      let rejectUpdate!: (error: Error) => void;
+      const update = jest.fn(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectUpdate = reject;
+          }),
+      );
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      const first = resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      });
+      await new Promise((done) => setImmediate(done));
+      const owner = (service as any).pendingStreamReservations.get(key);
+      expect(owner?.token).toEqual(expect.any(String));
+      const newer = { token: 'newer-owner', reservedAt: Date.now() };
+      (service as any).pendingStreamReservations.set(key, newer);
+
+      rejectUpdate(new Error('db down'));
+      await expect(first).rejects.toThrow('db down');
+      expect((service as any).pendingStreamReservations.get(key)).toEqual(
+        newer,
+      );
+    });
+
+    it('clears the claimed stream key when the lock release fails', async () => {
+      const raw = {
+        id: 'answer-1',
+        parentId: null,
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      const del = jest.fn().mockResolvedValue(1);
+      const set = jest.fn().mockResolvedValue('OK');
+      const service = createService({});
+      (service as any).messagesService = {
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findAll: jest.fn().mockResolvedValue([raw]),
+        create: jest.fn(),
+      };
+      jest
+        .spyOn(service, 'acquireConversationLock')
+        .mockResolvedValue(
+          jest.fn().mockRejectedValue(new Error('lock release failed')),
+        );
+      (service as any).redisClient = { isOpen: true, del, set };
+
+      await expect(
+        (service as any).createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: 'text',
+            parent_message_id: 'answer-1',
+            tools: [],
+            channel: 'mobile',
+          },
+          'request-id',
+          'ask',
+          'user-id',
+        ),
+      ).rejects.toThrow('lock release failed');
+      await new Promise((done) => setImmediate(done));
+
+      const activeKey =
+        'wizard:stream:user:user-id:namespace-id:conversation-id:active';
+      expect(set).toHaveBeenCalledWith(activeKey, '1', {
+        EX: expect.any(Number),
+      });
+      expect(del).toHaveBeenCalledWith(activeKey);
+    });
+
+    it('does not clear another request key after a no-op claim', async () => {
+      const key = 'user:user-id:namespace-id:conversation-id';
+      const raw = {
+        id: 'answer-1',
+        parentId: null,
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      let resolveFindAll!: (value: object[]) => void;
+      const findAll = jest.fn(
+        () =>
+          new Promise<object[]>((resolve) => {
+            resolveFindAll = resolve;
+          }),
+      );
+      const del = jest.fn().mockResolvedValue(1);
+      const service = createService({});
+      (service as any).messagesService = {
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findAll,
+        create: jest.fn(),
+      };
+      (service as any).streamSessions.set(key, { finished: false });
+
+      const pending = (service as any)
+        .createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: 'text',
+            parent_message_id: 'answer-1',
+            tools: [],
+            channel: 'mobile',
+          },
+          'request-id',
+          'ask',
+          'user-id',
+        )
+        .catch((error: unknown) => error);
+      await new Promise((done) => setImmediate(done));
+      // Redis recovered after this request's claim was a no-op.
+      (service as any).redisClient = { isOpen: true, del, set: jest.fn() };
+      resolveFindAll([raw]);
+
+      const error = await pending;
+      expect(error).toMatchObject({ code: 'CONVERSATION_BUSY' });
+      await new Promise((done) => setImmediate(done));
+      expect(del).not.toHaveBeenCalled();
+    });
+
+    it('ignores an expired reservation on a text start', async () => {
+      const key = 'user:user-id:namespace-id:conversation-id';
+      const raw = {
+        id: 'answer-1',
+        parentId: null,
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findAll: jest.fn().mockResolvedValue([raw]),
+        create: jest.fn(),
+      });
+      (service as any).pendingStreamReservations.set(key, {
+        token: 'expired-owner',
+        reservedAt: Date.now() - 120_000,
+      });
+
+      await expect(
+        (service as any).createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: 'text',
+            parent_message_id: 'answer-1',
+            tools: [],
+            channel: 'mobile',
+          },
+          'request-id',
+          'ask',
+          'user-id',
+        ),
+      ).resolves.toBeDefined();
+      expect((service as any).pendingStreamReservations.has(key)).toBe(false);
+    });
+
+    it('refuses a locked decision resume while a foreign reservation is pending', async () => {
+      const key = 'user:user-id:namespace-id:conversation-id';
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn();
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+      (service as any).pendingStreamReservations.set(key, {
+        token: 'foreign-owner',
+        reservedAt: Date.now(),
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({ code: 'conversation_busy' });
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('ignores an expired reservation on a locked decision resume', async () => {
+      const key = 'user:user-id:namespace-id:conversation-id';
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn().mockResolvedValue({
+        ...stored,
+        attrs: { ...stored.attrs, tool_call: { decisions: rejectDecisions } },
+      });
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+      (service as any).pendingStreamReservations.set(key, {
+        token: 'expired-owner',
+        reservedAt: Date.now() - 120_000,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+      expect(update).toHaveBeenCalledTimes(1);
+    });
+
+    it('releases the reservation when the stream cannot be created', async () => {
+      const stored = storedDecision(rejectDecisions);
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        findAll: jest.fn().mockRejectedValue(new Error('db down')),
+        update: jest.fn(),
+      });
+
+      await expect(
+        (service as any).createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: '',
+            parent_message_id: 'decision-d',
+            tools: [],
+            channel: 'mobile',
+            tool_call: { decisions: rejectDecisions },
+          },
+          'request-id',
+          'ask',
+          'user-id',
+        ),
+      ).rejects.toThrow('db down');
+      expect((service as any).pendingStreamReservations.size).toBe(0);
+    });
+
+    it('refuses a decision resume while the conversation is streaming under the lock', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn();
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+      (service as any).streamSessions.set(
+        'user:user-id:namespace-id:conversation-id',
+        { finished: false },
+      );
+
+      const error = await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({ code: 'conversation_busy' });
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('refuses a decided resume without a conversation lock and does not write', async () => {
+      const update = jest.fn();
+      const service = unlockedServiceWith({
+        findOneInConversation: jest
+          .fn()
+          .mockResolvedValue(storedDecision(rejectDecisions)),
+        findChildren: jest.fn().mockResolvedValue([toolResult]),
+        update,
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'interrupt_already_decided',
+        message_id: 'decision-d',
+      });
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('refuses a decided interrupt without a conversation lock and does not write', async () => {
+      const interrupt = {
+        id: 'interrupt-id',
+        conversationId: 'conversation-id',
+        message: { role: 'assistant' },
+        attrs: { tool_call: { interrupts: [{ id: 'call-1' }] } },
+      };
+      const update = jest.fn();
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(interrupt),
+        hasChildren: jest.fn().mockResolvedValue(true),
+        update,
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'interrupt-id',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'interrupt_already_decided',
+        message_id: 'interrupt-id',
+      });
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a decision whose parent cannot be loaded without a lock', async () => {
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(null),
+        update: jest.fn(),
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'missing',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(error).toMatchObject({ code: 'PARENT_CONVERSATION_MISMATCH' });
+      expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+    });
+
+    it('does not write a decision whose stored decisions match the request', async () => {
+      const stored = storedDecision(rejectDecisions);
+      const update = jest.fn();
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('overwrites an unapplied decision resolved as the latest message', async () => {
+      const stored = storedDecision([{ type: 'approve' }]);
+      const update = jest.fn(
+        (_id: string, _namespaceId: string, _conversationId: string, dto) =>
+          Promise.resolve({ ...stored, attrs: dto.attrs }),
+      );
+      const service = serviceWithMessages({
+        findLatest: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      await expect(
+        resolve(
+          service,
+          { tool_call: { decisions: [{ type: 'reject', end_turn: true }] } },
+          'latest',
+        ),
+      ).resolves.toBe('decision-d');
+
+      expect(update).toHaveBeenCalledWith(
+        'decision-d',
+        'namespace-id',
+        'conversation-id',
+        {
+          attrs: {
+            composer: { content: '' },
+            context: { edition: 'pro' },
+            tool_call: { decisions: [{ type: 'reject', end_turn: true }] },
+          },
+        },
+        false,
+      );
+    });
+
+    it('keeps the in-memory parent in sync with the saved attrs', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn(
+        (_id: string, _namespaceId: string, _conversationId: string, dto) =>
+          Promise.resolve({
+            ...stored,
+            attrs: { ...dto.attrs, saved_marker: true },
+          }),
+      );
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      });
+
+      expect(stored.attrs).toEqual({
+        composer: { content: '' },
+        context: { edition: 'pro' },
+        tool_call: { decisions: rejectDecisions },
+        saved_marker: true,
+      });
+    });
+
+    it('overwrites an unapplied decision in a share stream', async () => {
+      const stored = {
+        ...storedDecision([{ type: 'approve' }, { type: 'approve' }]),
+        parentId: null,
+      };
+      const update = jest.fn(
+        (_id: string, _namespaceId: string, _conversationId: string, dto) =>
+          Promise.resolve({ ...stored, attrs: dto.attrs }),
+      );
+      const messagesService = {
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        findAll: jest.fn().mockResolvedValue([stored]),
+        update,
+      };
+      const service = createService({ messagesService });
+      jest
+        .spyOn(service, 'acquireConversationLock')
+        .mockResolvedValue(jest.fn().mockResolvedValue(undefined));
+      jest
+        .spyOn(service as any, 'claimStreamActive')
+        .mockResolvedValue(undefined);
+
+      await service.createShareAgentStream(
+        {
+          id: 'share-id',
+          namespaceId: 'namespace-id',
+          shareType: ShareType.ALL,
+        } as any,
+        {
+          conversation_id: 'conversation-id',
+          parent_message_id: 'decision-d',
+          query: 'hello',
+          tools: [],
+          tool_call: { decisions: rejectDecisions },
+        } as any,
+        'request-id',
+        'ask',
+      );
+
+      expect(update).toHaveBeenCalledWith(
+        'decision-d',
+        'namespace-id',
+        'conversation-id',
+        {
+          attrs: {
+            composer: { content: '' },
+            context: { edition: 'pro' },
+            tool_call: { decisions: rejectDecisions },
+          },
+        },
+        false,
+      );
     });
   });
 
@@ -2293,6 +3667,7 @@ describe('persisted query receipts', () => {
     const create = jest.fn();
     (service as any).messagesService = {
       findAll: jest.fn().mockResolvedValue([query]),
+      findOneInConversation: jest.fn().mockResolvedValue(query),
       create,
     };
     jest.spyOn(service, 'stream').mockImplementation((_ns, _mode, body) => {
@@ -2371,6 +3746,8 @@ describe('persisted query receipts', () => {
     (service as any).messagesService = {
       create,
       findOne: jest.fn(),
+      findOneInConversation: jest.fn().mockResolvedValue(interrupt),
+      hasChildren: jest.fn().mockResolvedValue(false),
       findAll: jest.fn().mockResolvedValue([interrupt]),
     };
     jest.spyOn(service, 'stream').mockImplementation((_ns, _mode, body) => {
@@ -2406,6 +3783,7 @@ describe('persisted query receipts', () => {
       lang: '简体中文',
       channel: 'qq',
     });
+    expect((service as any).pendingStreamReservations.size).toBe(0);
   });
 });
 

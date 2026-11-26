@@ -15,6 +15,7 @@
     "pendingInterrupt": "这个对话正在等待工具确认",
     "interruptAlreadyDecided": "这个工具确认已经处理过了",
     "decisionNotApplied": "这个对话里有一个确认还没有生效",
+    "invalidDecisions": "确认数量与等待处理的工具调用不一致",
     "conversationBusy": "这个对话还在生成回复",
     "requestFailed": "请求失败，状态码 {status}"
   }

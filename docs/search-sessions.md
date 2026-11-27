@@ -2,8 +2,8 @@
 
 Resource semantic search is stateless across requests. The Backend owns paging
 with a plain offset/limit window over the Wizard's ranked chunk results; the only
-state is a per-process cache that avoids refetching the same raw pages within a
-short window.
+state is a per-process cache that avoids refetching the same fused recall list
+within a short window.
 
 ## Public API
 
@@ -11,8 +11,7 @@ POST /api/v1/namespaces/:namespace_id/search accepts query, type, match_mode,
 conditions, offset and limit. The response is items, total, offset and limit:
 
 - items: the requested page of permission-visible resources;
-- total: number of visible resources accumulated so far (a lower bound while raw
-  Wizard pages remain, exact once they are exhausted);
+- total: number of permission-visible resources in the fixed-depth recall list;
 - offset/limit: the normalized request window.
 
 GET /api/v1/namespaces/:namespace_id/search returns the resource picker array

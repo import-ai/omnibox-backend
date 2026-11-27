@@ -51,7 +51,10 @@ const MAX_SEARCH_LIMIT = 100;
 // Wizard call, so hits dropped as ineligible are backfilled without another
 // round trip (auto-recall has a 1 s budget).
 const HISTORY_CANDIDATE_FACTOR = 3;
-const SEMANTIC_SEARCH_PAGE_SIZE = 100;
+// One fused recall chunk per cache entry: paging always slices the same
+// fixed-depth list, so page 2 is not fused at a deeper (different) depth.
+const SEMANTIC_SEARCH_RECALL_DEPTH = 200;
+const SEMANTIC_SEARCH_MAX_RECALL_DEPTH = 400;
 const SEMANTIC_SEARCH_CACHE_TTL_MS = 30 * 1000;
 const SEMANTIC_SEARCH_CACHE_MAX_ENTRIES = 100;
 const SEMANTIC_SEARCH_CACHE_MAX_ITEMS = 2000;
@@ -70,13 +73,7 @@ export interface SearchPaginatedResult {
 
 interface SemanticSearchCacheEntry {
   expiresAt: number;
-  hasMoreRawResults: boolean;
   items: IndexedDocDto[];
-  nextSearchOffset: number;
-  // The articles already accumulated, so the copies a second subscribing folder
-  // holds are dropped even when they arrive on a later wizard page.
-  seenArticleIdentities: Set<string>;
-  seenResourceIds: Set<string>;
 }
 
 @Injectable()
@@ -256,8 +253,6 @@ export class SearchService {
     offset: number,
     limit: number,
   ): Promise<Pick<SearchPaginatedResult, 'items' | 'total'>> {
-    const requestedItemCount = offset + limit;
-    const requestedItemCountWithLookahead = requestedItemCount + 1;
     const cacheKey = this.getSemanticSearchCacheKey(
       userId,
       namespaceId,
@@ -265,60 +260,48 @@ export class SearchService {
       candidateResourceIds,
     );
     const cachedEntry = this.getSemanticSearchCacheEntry(cacheKey);
-    const cacheEntry = cachedEntry || this.createSemanticSearchCacheEntry();
-    const cachedItemCount = cachedEntry?.items.length ?? 0;
+    if (!cachedEntry) {
+      const fetchRecallPage = () =>
+        this.searchSemanticResources(
+          userId,
+          namespaceId,
+          normalizedQuery,
+          candidateResourceIds,
+          {
+            offset: 0,
+            limit: SEMANTIC_SEARCH_RECALL_DEPTH,
+          },
+          SEMANTIC_SEARCH_MAX_RECALL_DEPTH,
+        );
+      let page = await fetchRecallPage();
+      if (page.partial) {
+        page = await fetchRecallPage();
+      }
+      const items = page.items.slice(offset, offset + limit);
+      if (page.partial) {
+        // A failed branch can drop candidates from the fused list, so serve the
+        // page without caching it: the next request retries instead of paging
+        // over a stable but incomplete list.
+        return { items, total: page.items.length };
+      }
+      const cacheEntry: SemanticSearchCacheEntry = {
+        expiresAt: Date.now() + SEMANTIC_SEARCH_CACHE_TTL_MS,
+        items: page.items,
+      };
+      this.setSemanticSearchCacheEntry(cacheKey, cacheEntry);
+      return { items, total: cacheEntry.items.length };
+    }
 
-    for (
-      ;
-      cacheEntry.items.length < requestedItemCountWithLookahead &&
-      cacheEntry.hasMoreRawResults;
-    ) {
-      const searchPage = await this.searchSemanticResources(
+    // The cache holds the complete fixed-depth list; slice the requested page
+    // and recheck permissions before returning it.
+    const items = cachedEntry.items.slice(offset, offset + limit);
+    return {
+      items: await this.refreshCachedResourcePermissions(
         userId,
         namespaceId,
-        normalizedQuery,
-        candidateResourceIds,
-        {
-          offset: cacheEntry.nextSearchOffset,
-          limit: SEMANTIC_SEARCH_PAGE_SIZE,
-        },
-      );
-      cacheEntry.nextSearchOffset += searchPage.limit;
-      for (const item of searchPage.items) {
-        if (item.type === DocType.RESOURCE) {
-          if (cacheEntry.seenResourceIds.has(item.resourceId)) {
-            continue;
-          }
-          // Collapsed as the accumulator is filled, i.e. before the page is
-          // sliced: the surviving copy is the one the wizard ranked highest,
-          // which keeps paging stable and the total honest.
-          const identity = getArticleIdentity(item);
-          if (identity !== null) {
-            if (cacheEntry.seenArticleIdentities.has(identity)) {
-              continue;
-            }
-            cacheEntry.seenArticleIdentities.add(identity);
-          }
-          cacheEntry.seenResourceIds.add(item.resourceId);
-        }
-        cacheEntry.items.push(item);
-      }
-      cacheEntry.hasMoreRawResults = searchPage.rawCount >= searchPage.limit;
-    }
-    this.setSemanticSearchCacheEntry(cacheKey, cacheEntry);
-    const items = cacheEntry.items.slice(offset, requestedItemCount);
-    const shouldRefreshCachedPermissions =
-      cachedEntry !== null && offset < cachedItemCount;
-
-    return {
-      items: shouldRefreshCachedPermissions
-        ? await this.refreshCachedResourcePermissions(
-            userId,
-            namespaceId,
-            items,
-          )
-        : items,
-      total: cacheEntry.items.length,
+        items,
+      ),
+      total: cachedEntry.items.length,
     };
   }
 
@@ -534,17 +517,6 @@ export class SearchService {
     return visibleItems;
   }
 
-  private createSemanticSearchCacheEntry(): SemanticSearchCacheEntry {
-    return {
-      expiresAt: Date.now() + SEMANTIC_SEARCH_CACHE_TTL_MS,
-      hasMoreRawResults: true,
-      items: [],
-      nextSearchOffset: 0,
-      seenArticleIdentities: new Set<string>(),
-      seenResourceIds: new Set<string>(),
-    };
-  }
-
   private getSemanticSearchCacheEntry(
     key: string,
   ): SemanticSearchCacheEntry | null {
@@ -604,19 +576,17 @@ export class SearchService {
     normalizedQuery: string,
     candidateResourceIds: string[] | null,
     pagination: Required<SearchPaginationOptions>,
+    maxLimit: number = MAX_SEARCH_LIMIT,
   ): Promise<{
     items: IndexedDocDto[];
-    limit: number;
-    rawCount: number;
+    hasMore: boolean;
+    partial: boolean;
   }> {
     const searchRequest = new SearchRequestDto();
     searchRequest.query = normalizedQuery;
     searchRequest.namespaceId = namespaceId;
     searchRequest.userId = userId;
-    searchRequest.limit = Math.min(
-      Math.max(pagination.limit, 1),
-      MAX_SEARCH_LIMIT,
-    );
+    searchRequest.limit = Math.min(Math.max(pagination.limit, 1), maxLimit);
     searchRequest.offset = Math.max(pagination.offset, 0);
     searchRequest.type = IndexRecordType.CHUNK;
     searchRequest.resourceIds = candidateResourceIds || undefined;
@@ -707,8 +677,8 @@ export class SearchService {
 
     return {
       items,
-      limit: searchRequest.limit,
-      rawCount: records.length,
+      hasMore: result?.hasMore ?? false,
+      partial: result?.partial ?? false,
     };
   }
 

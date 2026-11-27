@@ -819,7 +819,7 @@ describe('SearchService', () => {
     });
   });
 
-  it('uses default response limit while fetching semantic pages in larger batches', async () => {
+  it('fetches one fixed-depth recall page for a cache miss', async () => {
     const { service, wizardApiService } = createService();
 
     const result = await service.searchPaginated(
@@ -833,66 +833,117 @@ describe('SearchService', () => {
       },
     );
 
+    expect(wizardApiService.search).toHaveBeenCalledTimes(1);
     expect(wizardApiService.search).toHaveBeenCalledWith(
       expect.objectContaining({
         offset: 0,
-        limit: 100,
+        limit: 200,
       }),
     );
     expect(result.limit).toBe(20);
   });
 
-  it('reports more than the current page total when semantic search has additional results', async () => {
+  it('fetches the fixed-depth recall page even when the requested offset is deep', async () => {
     const { permissionsService, resourcesService, service, wizardApiService } =
       createService();
-    const visibleFirstPageResourceIds = Array.from(
+    const records = Array.from({ length: 200 }, (_, index) => ({
+      id: `deep-record-${index}`,
+      type: IndexRecordType.CHUNK,
+      chunk: {
+        resourceId: `deep-resource-${index}`,
+        title: `Deep title ${index}`,
+        text: `Deep content ${index}`,
+      },
+    }));
+
+    wizardApiService.search.mockResolvedValue({ records });
+    permissionsService.getCurrentPermissions.mockImplementation(
+      (_userId: string, _namespaceId: string, resources: any[]) =>
+        Promise.resolve(
+          new Map(
+            resources.map((resource) => [
+              resource.id,
+              ResourcePermission.CAN_VIEW,
+            ]),
+          ),
+        ),
+    );
+    resourcesService.batchGetParentResources.mockImplementation(
+      (_namespaceId: string, ids: string[]) =>
+        Promise.resolve(
+          new Map(
+            ids.map((id) => [
+              id,
+              {
+                id,
+                name: `Title for ${id}`,
+                attrs: {},
+                resourceType: ResourceType.DOC,
+              },
+            ]),
+          ),
+        ),
+    );
+
+    const result = await service.searchPaginated(
+      userId,
+      namespaceId,
+      'query',
+      undefined,
+      {},
+      {
+        offset: 120,
+        limit: 20,
+      },
+    );
+
+    expect(wizardApiService.search).toHaveBeenCalledTimes(1);
+    expect(wizardApiService.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        offset: 0,
+        limit: 200,
+      }),
+    );
+    expect(result.items).toHaveLength(20);
+    expect(result.items[0]).toMatchObject({
+      resourceId: 'deep-resource-120',
+    });
+    expect(result.items[19]).toMatchObject({
+      resourceId: 'deep-resource-139',
+    });
+    expect(result.total).toBe(200);
+  });
+
+  it('counts only visible resources from the fixed-depth list', async () => {
+    const { permissionsService, resourcesService, service, wizardApiService } =
+      createService();
+    const visibleResourceIds = Array.from(
       { length: 20 },
       (_, index) => `visible-page-resource-${index}`,
     );
-    const hiddenFirstPageResourceIds = Array.from(
+    const hiddenResourceIds = Array.from(
       { length: 80 },
       (_, index) => `hidden-page-resource-${index}`,
     );
-    const lookaheadResourceId = 'lookahead-resource-id';
-    const visibleResourceIds = new Set([
-      ...visibleFirstPageResourceIds,
-      lookaheadResourceId,
-    ]);
+    const allowedResourceIds = new Set(visibleResourceIds);
 
-    wizardApiService.search
-      .mockResolvedValueOnce({
-        records: [
-          ...visibleFirstPageResourceIds,
-          ...hiddenFirstPageResourceIds,
-        ].map((id) => ({
-          id: `record-${id}`,
-          type: IndexRecordType.CHUNK,
-          chunk: {
-            resourceId: id,
-            title: `Title for ${id}`,
-            text: `Content for ${id}`,
-          },
-        })),
-      })
-      .mockResolvedValueOnce({
-        records: [
-          {
-            id: `record-${lookaheadResourceId}`,
-            type: IndexRecordType.CHUNK,
-            chunk: {
-              resourceId: lookaheadResourceId,
-              title: 'Lookahead title',
-              text: 'Lookahead content',
-            },
-          },
-        ],
-      });
+    wizardApiService.search.mockResolvedValue({
+      records: [...visibleResourceIds, ...hiddenResourceIds].map((id) => ({
+        id: `record-${id}`,
+        type: IndexRecordType.CHUNK,
+        chunk: {
+          resourceId: id,
+          title: `Title for ${id}`,
+          text: `Content for ${id}`,
+        },
+      })),
+    });
     permissionsService.getCurrentPermissions.mockImplementation(
       (_userId: string, _namespaceId: string, resources: any[]) =>
         Promise.resolve(
           new Map(
             resources
-              .filter((resource) => visibleResourceIds.has(resource.id))
+              .filter((resource) => allowedResourceIds.has(resource.id))
               .map((resource) => [resource.id, ResourcePermission.CAN_VIEW]),
           ),
         ),
@@ -927,37 +978,24 @@ describe('SearchService', () => {
     );
 
     expect(result.items).toHaveLength(20);
-    expect(result.total).toBe(21);
-    expect(wizardApiService.search).toHaveBeenCalledTimes(2);
+    expect(result.total).toBe(20);
+    expect(wizardApiService.search).toHaveBeenCalledTimes(1);
   });
 
-  it('reuses semantic scan state for sequential offset pages', async () => {
+  it('slices sequential offset pages from one fixed-depth list', async () => {
     const { permissionsService, resourcesService, service, wizardApiService } =
       createService();
-    const createRecords = (page: number) =>
-      Array.from({ length: 100 }, (_, index) => {
-        const id = `page-${page}-resource-${index}`;
-        return {
-          id: `page-${page}-record-${index}`,
-          type: IndexRecordType.CHUNK,
-          chunk: {
-            resourceId: id,
-            title: `Page ${page} title ${index}`,
-            text: `Page ${page} content ${index}`,
-          },
-        };
-      });
+    const records = Array.from({ length: 200 }, (_, index) => ({
+      id: `page-record-${index}`,
+      type: IndexRecordType.CHUNK,
+      chunk: {
+        resourceId: `page-resource-${index}`,
+        title: `Page title ${index}`,
+        text: `Page content ${index}`,
+      },
+    }));
 
-    wizardApiService.search.mockImplementation((request: any) => {
-      const records =
-        request.offset === 0
-          ? createRecords(0)
-          : request.offset === 100
-            ? createRecords(1)
-            : [];
-
-      return Promise.resolve({ records });
-    });
+    wizardApiService.search.mockResolvedValue({ records });
     permissionsService.getCurrentPermissions.mockImplementation(
       (_userId: string, _namespaceId: string, resources: any[]) =>
         Promise.resolve(
@@ -986,7 +1024,7 @@ describe('SearchService', () => {
         ),
     );
 
-    await service.searchPaginated(
+    const firstPage = await service.searchPaginated(
       userId,
       namespaceId,
       'query',
@@ -1014,11 +1052,79 @@ describe('SearchService', () => {
       1,
       expect.objectContaining({
         offset: 0,
-        limit: 100,
+        limit: 200,
       }),
     );
-    expect(secondPage.items[0]).toMatchObject({
-      resourceId: 'page-0-resource-20',
+    expect(firstPage.total).toBe(200);
+    expect(secondPage.total).toBe(200);
+    expect(firstPage.items.map((item: any) => item.resourceId)).toEqual(
+      Array.from({ length: 20 }, (_, index) => `page-resource-${index}`),
+    );
+    expect(secondPage.items.map((item: any) => item.resourceId)).toEqual(
+      Array.from({ length: 20 }, (_, index) => `page-resource-${index + 20}`),
+    );
+  });
+
+  it('returns an empty page beyond the fixed-depth list with the exact total', async () => {
+    const { permissionsService, resourcesService, service, wizardApiService } =
+      createService();
+    const records = Array.from({ length: 200 }, (_, index) => ({
+      id: `beyond-record-${index}`,
+      type: IndexRecordType.CHUNK,
+      chunk: {
+        resourceId: `beyond-resource-${index}`,
+        title: `Beyond title ${index}`,
+        text: `Beyond content ${index}`,
+      },
+    }));
+
+    wizardApiService.search.mockResolvedValue({ records });
+    permissionsService.getCurrentPermissions.mockImplementation(
+      (_userId: string, _namespaceId: string, resources: any[]) =>
+        Promise.resolve(
+          new Map(
+            resources.map((resource) => [
+              resource.id,
+              ResourcePermission.CAN_VIEW,
+            ]),
+          ),
+        ),
+    );
+    resourcesService.batchGetParentResources.mockImplementation(
+      (_namespaceId: string, ids: string[]) =>
+        Promise.resolve(
+          new Map(
+            ids.map((id) => [
+              id,
+              {
+                id,
+                name: `Title for ${id}`,
+                attrs: {},
+                resourceType: ResourceType.DOC,
+              },
+            ]),
+          ),
+        ),
+    );
+
+    const result = await service.searchPaginated(
+      userId,
+      namespaceId,
+      'query',
+      undefined,
+      {},
+      {
+        offset: 200,
+        limit: 20,
+      },
+    );
+
+    expect(wizardApiService.search).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      items: [],
+      total: 200,
+      offset: 200,
+      limit: 20,
     });
   });
 
@@ -1111,83 +1217,165 @@ describe('SearchService', () => {
     expect(permissionsService.getCurrentPermissions).toHaveBeenCalledTimes(2);
   });
 
-  it('deduplicates semantic resource results across fetched pages', async () => {
+  it('retries a partial fixed-depth page and does not cache a still-partial page', async () => {
+    const { service, wizardApiService } = createService();
+    const records = [
+      {
+        id: 'partial-record-one',
+        type: IndexRecordType.CHUNK,
+        chunk: {
+          resourceId,
+          title: 'Partial title one',
+          text: 'Partial content one',
+        },
+      },
+      {
+        id: 'partial-record-two',
+        type: IndexRecordType.CHUNK,
+        chunk: {
+          resourceId: matchingResourceId,
+          title: 'Partial title two',
+          text: 'Partial content two',
+        },
+      },
+    ];
+    wizardApiService.search.mockResolvedValue({ records, partial: true });
+
+    const firstPage = await service.searchPaginated(
+      userId,
+      namespaceId,
+      'query',
+      undefined,
+      {},
+      {
+        offset: 1,
+        limit: 1,
+      },
+    );
+
+    expect(wizardApiService.search).toHaveBeenCalledTimes(2);
+    expect(firstPage).toEqual({
+      items: [expect.objectContaining({ resourceId: matchingResourceId })],
+      total: 2,
+      offset: 1,
+      limit: 1,
+    });
+
+    const secondPage = await service.searchPaginated(
+      userId,
+      namespaceId,
+      'query',
+      undefined,
+      {},
+      {
+        offset: 0,
+        limit: 1,
+      },
+    );
+
+    expect(wizardApiService.search).toHaveBeenCalledTimes(4);
+    expect(secondPage.items).toEqual([expect.objectContaining({ resourceId })]);
+  });
+
+  it('caches a partial fixed-depth page that becomes complete on retry', async () => {
+    const { service, wizardApiService } = createService();
+    const records = [
+      {
+        id: 'retried-record-one',
+        type: IndexRecordType.CHUNK,
+        chunk: {
+          resourceId,
+          title: 'Retried title one',
+          text: 'Retried content one',
+        },
+      },
+      {
+        id: 'retried-record-two',
+        type: IndexRecordType.CHUNK,
+        chunk: {
+          resourceId: matchingResourceId,
+          title: 'Retried title two',
+          text: 'Retried content two',
+        },
+      },
+    ];
+    wizardApiService.search
+      .mockResolvedValueOnce({ records, partial: true })
+      .mockResolvedValueOnce({ records, partial: false });
+
+    const firstPage = await service.searchPaginated(
+      userId,
+      namespaceId,
+      'query',
+      undefined,
+      {},
+      {
+        offset: 0,
+        limit: 1,
+      },
+    );
+
+    expect(wizardApiService.search).toHaveBeenCalledTimes(2);
+    expect(firstPage.items).toEqual([expect.objectContaining({ resourceId })]);
+    expect(firstPage.total).toBe(2);
+
+    const secondPage = await service.searchPaginated(
+      userId,
+      namespaceId,
+      'query',
+      undefined,
+      {},
+      {
+        offset: 1,
+        limit: 1,
+      },
+    );
+
+    expect(wizardApiService.search).toHaveBeenCalledTimes(2);
+    expect(secondPage.items).toEqual([
+      expect.objectContaining({ resourceId: matchingResourceId }),
+    ]);
+    expect(secondPage.total).toBe(2);
+  });
+
+  it('deduplicates semantic resource results within the fixed-depth list', async () => {
     const { permissionsService, resourcesService, service, wizardApiService } =
       createService();
     const duplicateResourceId = 'duplicate-resource-id';
-    const firstPageResourceIds = Array.from(
-      { length: 12 },
-      (_, index) => `first-page-resource-id-${index}`,
-    );
-    const hiddenResourceIds = Array.from(
-      { length: 87 },
-      (_, index) => `hidden-resource-id-${index}`,
-    );
-    const secondPageResourceIds = Array.from(
-      { length: 7 },
-      (_, index) => `second-page-resource-id-${index}`,
-    );
-    const allowedResourceIds = new Set([
-      duplicateResourceId,
-      ...firstPageResourceIds,
-      ...secondPageResourceIds,
-    ]);
-    const firstPageRecords = [
-      {
-        id: 'duplicate-result-id-1',
-        type: IndexRecordType.CHUNK,
-        chunk: {
-          resourceId: duplicateResourceId,
-          title: 'Duplicate title',
-          text: 'First matching chunk',
-        },
-      },
-      ...firstPageResourceIds.map((id, index) => ({
-        id: `first-page-result-id-${index}`,
-        type: IndexRecordType.CHUNK,
-        chunk: {
-          resourceId: id,
-          title: `First page title ${index}`,
-          text: `First page content ${index}`,
-        },
-      })),
-      ...hiddenResourceIds.map((id, index) => ({
-        id: `hidden-result-id-${index}`,
-        type: IndexRecordType.CHUNK,
-        chunk: {
-          resourceId: id,
-          title: `Hidden title ${index}`,
-          text: `Hidden content ${index}`,
-        },
-      })),
-    ];
+    const uniqueResourceId = 'unique-resource-id';
+    const allowedResourceIds = new Set([duplicateResourceId, uniqueResourceId]);
 
-    wizardApiService.search
-      .mockResolvedValueOnce({
-        records: firstPageRecords,
-      })
-      .mockResolvedValueOnce({
-        records: [
-          {
-            id: 'duplicate-result-id-2',
-            type: IndexRecordType.CHUNK,
-            chunk: {
-              resourceId: duplicateResourceId,
-              title: 'Duplicate title',
-              text: 'Second matching chunk',
-            },
+    wizardApiService.search.mockResolvedValue({
+      records: [
+        {
+          id: 'duplicate-result-id-1',
+          type: IndexRecordType.CHUNK,
+          chunk: {
+            resourceId: duplicateResourceId,
+            title: 'Duplicate title',
+            text: 'First matching chunk',
           },
-          ...secondPageResourceIds.map((id, index) => ({
-            id: `second-page-result-id-${index}`,
-            type: IndexRecordType.CHUNK,
-            chunk: {
-              resourceId: id,
-              title: `Second page title ${index}`,
-              text: `Second page content ${index}`,
-            },
-          })),
-        ],
-      });
+        },
+        {
+          id: 'duplicate-result-id-2',
+          type: IndexRecordType.CHUNK,
+          chunk: {
+            resourceId: duplicateResourceId,
+            title: 'Duplicate title',
+            text: 'Second matching chunk',
+          },
+        },
+        {
+          id: 'unique-result-id',
+          type: IndexRecordType.CHUNK,
+          chunk: {
+            resourceId: uniqueResourceId,
+            title: 'Unique title',
+            text: 'Unique content',
+          },
+        },
+      ],
+    });
     permissionsService.getCurrentPermissions.mockImplementation(
       (_userId: string, _namespaceId: string, resources: any[]) =>
         Promise.resolve(
@@ -1232,13 +1420,13 @@ describe('SearchService', () => {
 
     expect(result.items.map((item: any) => item.resourceId)).toEqual([
       duplicateResourceId,
-      ...firstPageResourceIds,
-      ...secondPageResourceIds,
+      uniqueResourceId,
     ]);
-    expect(result.total).toBe(20);
+    expect(result.total).toBe(2);
+    expect(wizardApiService.search).toHaveBeenCalledTimes(1);
   });
 
-  it('continues semantic search pages until the requested filtered page is filled', async () => {
+  it('does not fetch beyond the fixed-depth list to fill a filtered page', async () => {
     const {
       matcherService,
       namespaceResourcesService,
@@ -1268,7 +1456,7 @@ describe('SearchService', () => {
         value: 'matched',
       },
     ];
-    const nonMatchingRecords = Array.from({ length: 100 }, (_, index) => ({
+    const nonMatchingRecords = Array.from({ length: 200 }, (_, index) => ({
       id: `non-matching-result-id-${index}`,
       type: IndexRecordType.CHUNK,
       chunk: {
@@ -1293,9 +1481,6 @@ describe('SearchService', () => {
             },
           },
         ],
-      })
-      .mockResolvedValueOnce({
-        records: [],
       });
     permissionsService.getCurrentPermissions.mockImplementation(
       (_userId: string, _namespaceId: string, resources: any[]) =>
@@ -1364,31 +1549,18 @@ describe('SearchService', () => {
       },
     );
 
-    expect(wizardApiService.search).toHaveBeenCalledTimes(2);
+    expect(wizardApiService.search).toHaveBeenCalledTimes(1);
     expect(wizardApiService.search).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
         offset: 0,
-        limit: 100,
-        resourceIds: [laterMatchingResourceId],
-      }),
-    );
-    expect(wizardApiService.search).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        offset: 100,
-        limit: 100,
+        limit: 200,
         resourceIds: [laterMatchingResourceId],
       }),
     );
     expect(result).toEqual({
-      items: [
-        expect.objectContaining({
-          type: DocType.RESOURCE,
-          resourceId: laterMatchingResourceId,
-        }),
-      ],
-      total: 1,
+      items: [],
+      total: 0,
       offset: 0,
       limit: 1,
     });

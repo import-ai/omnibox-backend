@@ -52,10 +52,12 @@ export interface MessageAttrs {
   answer_timing?: AnswerTiming;
   turn_id?: string;
   turn_run_id?: string;
+  can_steer?: boolean;
   stopped_run_id?: string;
   stopped_runs?: string[];
   turn_status?: 'stopped';
   client_request_id?: string;
+  submission_fingerprint?: string;
   citations?: Record<string, any>[];
   error_message?: string;
   error_code?: string;

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { BotBase } from 'omniboxd/applications/apps/bot-base';
+import { getActiveTraceHeaders } from 'omniboxd/tracing/trace-headers';
 
 @Injectable()
 export class QQBot extends BotBase {
@@ -33,6 +34,7 @@ export class QQBot extends BotBase {
         signal: AbortSignal.timeout(5000),
         method: 'POST',
         headers: {
+          ...getActiveTraceHeaders(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ key: attrs.key }),

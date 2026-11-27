@@ -7,5 +7,7 @@ export interface BehaviorContext {
   user_id: string;
   task_ids: string[];
   changed?: boolean;
+  /** The same frozen action id resumed after a failed request. */
+  reopened?: boolean;
 }
 export const behaviorContext = new AsyncLocalStorage<BehaviorContext>();

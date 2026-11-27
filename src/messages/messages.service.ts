@@ -14,6 +14,7 @@ import { CreateMessageDto } from 'omniboxd/messages/dto/create-message.dto';
 import {
   isMessageIndexable,
   Message,
+  MessageAttrs,
   MessageStatus,
   OpenAIMessage,
   OpenAIMessageRole,
@@ -399,14 +400,39 @@ export class MessagesService {
     id: string,
     timing: AnswerTiming,
   ): Promise<Message | null> {
+    return this.writeAnswerTiming(id, timing, { requireRowStatus: true });
+  }
+
+  /**
+   * Terminal timing for a steered turn whose assistant row was already closed
+   * (its eos set SUCCESS before the run failed/stopped). The row status no
+   * longer describes the turn outcome, so only identity, the stopped-run
+   * guard and the running-timing precondition apply.
+   */
+  async finalizeAnswerTiming(
+    id: string,
+    timing: AnswerTiming,
+  ): Promise<Message | null> {
+    return this.writeAnswerTiming(id, timing, { requireRowStatus: false });
+  }
+
+  private async writeAnswerTiming(
+    id: string,
+    timing: AnswerTiming,
+    options: { requireRowStatus: boolean },
+  ): Promise<Message | null> {
     return this.dataSource.transaction(async (manager) => {
       const message = await this.lockStreamMessage(manager, id);
       if (
-        (timing.status === 'failed'
-          ? message.status !== MessageStatus.FAILED
-          : message.status !== MessageStatus.SUCCESS) ||
         message.attrs?.turn_run_id !== timing.run_id ||
         message.attrs?.answer_timing?.answer_id !== timing.answer_id
+      )
+        return null;
+      if (
+        options.requireRowStatus &&
+        (timing.status === 'failed'
+          ? message.status !== MessageStatus.FAILED
+          : message.status !== MessageStatus.SUCCESS)
       )
         return null;
       if (message.attrs.turn_id) {
@@ -439,12 +465,38 @@ export class MessagesService {
     });
   }
 
+  async settleInterruptedUsage(id: string, usage: MessageAttrs['usage']) {
+    const tokens = agentTokenDeltaOf({ usage });
+    if (!tokens) return;
+    return this.dataSource.transaction(async (manager) => {
+      const message = await this.lockStreamMessage(manager, id);
+      if (
+        message.message.role !== OpenAIMessageRole.ASSISTANT ||
+        message.attrs?.usage
+      )
+        return;
+      message.attrs = { ...message.attrs, usage };
+      message.inputTokenCached += tokens.inputTokenCached;
+      message.inputTokenUncached += tokens.inputTokenUncached;
+      message.outputToken += tokens.outputToken;
+      return manager.save(message);
+    });
+  }
+
   async updateDelta(id: string, delta: ChatDeltaResponse) {
     const deltaMessage: Partial<OpenAIMessage> = delta.message;
 
     return this.dataSource.transaction(async (manager) => {
       const message = await this.lockStreamMessage(manager, id);
+      const finishingBackgroundTool =
+        message.status === MessageStatus.SUCCESS &&
+        message.message.role === OpenAIMessageRole.TOOL &&
+        !!deltaMessage.tool_call_id &&
+        message.message.tool_call_id === deltaMessage.tool_call_id &&
+        message.attrs?.tool_call?.status === 'running' &&
+        ['success', 'failed'].includes(delta.attrs?.tool_call?.status ?? '');
       if (
+        !finishingBackgroundTool &&
         [
           MessageStatus.SUCCESS,
           MessageStatus.STOPPED,
@@ -470,7 +522,7 @@ export class MessagesService {
         message.message.tool_call_id = deltaMessage.tool_call_id;
       }
       // <<< OpenAI Message
-      message.status = MessageStatus.STREAMING;
+      if (!finishingBackgroundTool) message.status = MessageStatus.STREAMING;
       if (delta.attrs) {
         message.attrs = message.attrs || {};
         Object.assign(message.attrs, delta.attrs);
@@ -497,6 +549,23 @@ export class MessagesService {
   // The newest message no other message replies to. Messages saved in one
   // transaction share a created_at, so recency alone can pick a message that
   // already has a reply.
+  async findSubmitted(
+    userId: string,
+    conversationId: string,
+    requestId: string,
+  ) {
+    return this.messageRepository
+      .createQueryBuilder('message')
+      .where(
+        'message.conversationId = :conversationId AND message.userId = :userId',
+        { conversationId, userId },
+      )
+      .andWhere("message.attrs ->> 'client_request_id' = :requestId", {
+        requestId,
+      })
+      .getOne();
+  }
+
   async findLatest(userId: string, conversationId: string) {
     const messages = await this.messageRepository.find({
       select: { id: true, parentId: true, createdAt: true },
@@ -602,6 +671,7 @@ export class MessagesService {
               b.id.localeCompare(a.id),
           )[0];
     if (!leaf) return null;
+    const queryId = activeRun?.queryId ?? leaf.attrs?.turn_id;
     const branch: Message[] = [];
     const seen = new Set<string>();
     while (leaf && !seen.has(leaf.id)) {
@@ -609,14 +679,13 @@ export class MessagesService {
       branch.push(leaf);
       if (
         leaf.message.role === OpenAIMessageRole.USER &&
-        !leaf.attrs?.tool_call?.decisions?.length
+        !leaf.attrs?.tool_call?.decisions?.length &&
+        (!queryId || leaf.id === queryId)
       )
         break;
       leaf = leaf.parentId ? byId.get(leaf.parentId) : undefined;
     }
-    const query =
-      byId.get(activeRun?.queryId ?? branch[0].attrs?.turn_id ?? '') ??
-      branch.at(-1);
+    const query = queryId ? byId.get(queryId) : branch.at(-1);
     if (
       !query ||
       !branch.some((m) => m.id === query.id) ||
@@ -643,15 +712,15 @@ export class MessagesService {
           activeIds.add(message.id);
       const active = scoped.filter((m) => activeIds.has(m.id));
       const terminal = new Set(['success', 'failed', 'rejected', 'stopped']);
-      const pending = active.filter(
-        (m) =>
-          m.id !== query.id &&
-          [
-            MessageStatus.PENDING,
-            MessageStatus.STREAMING,
-            MessageStatus.INTERRUPTED,
-          ].includes(m.status),
-      );
+      const isPending = (m: Message) =>
+        [
+          MessageStatus.PENDING,
+          MessageStatus.STREAMING,
+          MessageStatus.INTERRUPTED,
+        ].includes(m.status) ||
+        (m.message.role === OpenAIMessageRole.TOOL &&
+          m.attrs?.tool_call?.status === 'running');
+      const pending = active.filter((m) => m.id !== query.id && isPending(m));
       const unresolved = active.some((m) =>
         m.message.tool_calls?.some(
           (call) =>
@@ -704,14 +773,7 @@ export class MessagesService {
           where: { id: candidate.id },
           lock: { mode: 'pessimistic_write' },
         });
-        if (
-          ![
-            MessageStatus.PENDING,
-            MessageStatus.STREAMING,
-            MessageStatus.INTERRUPTED,
-          ].includes(message.status)
-        )
-          continue;
+        if (!isPending(message)) continue;
         message.status = MessageStatus.STOPPED;
         if (
           message.message.role === OpenAIMessageRole.TOOL &&

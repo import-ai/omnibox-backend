@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, Res } from '@nestjs/common';
+import { Body, Controller, Headers, Param, Post, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
@@ -9,13 +9,24 @@ import { WizardService } from 'omniboxd/wizard/wizard.service';
 import { CreateTempfileReqDto } from './dto/create-tempfile-req.dto';
 import { HeartbeatTaskRequestDto } from './dto/heartbeat-task.dto';
 import { PollTaskRequestDto, PollTaskResponseDto } from './dto/poll-task.dto';
+import { StreamService } from './stream.service';
 
 @Controller('internal/api/v1/wizard')
 export class InternalWizardController {
   constructor(
+    private readonly streams: StreamService,
     private readonly wizardService: WizardService,
     private readonly chunkManagerService: ChunkManagerService,
   ) {}
+
+  @Public()
+  @Post('steer/read')
+  async readSteer(
+    @Headers('x-steer-token') token: string,
+    @Body() body: { cursor: number; finish: boolean; wait?: boolean },
+  ) {
+    return this.streams.readSteer(token, body.cursor, body.finish, body.wait);
+  }
 
   @Public()
   @Post('callback')

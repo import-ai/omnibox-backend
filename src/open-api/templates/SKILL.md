@@ -79,6 +79,68 @@ Use `GET /api-keys/info` to inspect the current user, namespace, namespace tier,
 
 ## Common workflows
 
+### Read document comments
+
+Requires `resources:read`, a resource inside the API key scope, and current space membership and view access. Both endpoints are read-only and consume the usual Open API quota, including each additional page. Some failed requests may also consume quota.
+
+- `GET /resources/<resource_id>/comment-threads?type=all&offset=0&limit=20`
+- `GET /resources/<resource_id>/comment-threads/<thread_id>/comments?offset=0&limit=20`
+
+Thread filters: `type=all|document|inline` (default `all`) and optional `resolved=true|false` (omit for both states). Both endpoints accept decimal integer `offset` (default `0`, minimum `0`) and `limit` (default `20`, range `1–100`). Empty, fractional, negative, repeated and scientific-notation pagination values are rejected with `400`.
+
+Both responses contain `items`, `total`, `offset`, `limit`, and `has_more`. The thread endpoint counts threads and previews only the earliest surviving comment in each thread. Its `comments_pagination` contains the comment total, `offset=0`, `limit=1`, and `has_more`. To read the rest, continue through the comments endpoint from `offset=1`, or read the entire thread independently from `offset=0`. The comment endpoint counts comments and includes `mention_display_names` for the current page.
+
+Comments and threads are ordered by creation time, then ID, ascending. Deletions may leave a reply as the earliest surviving comment; do not assume it is the original message or invent parent-comment relationships. Pagination is consistent within one request; changes between requests may shift offsets. Traverse a stable dataset for a complete export.
+
+Document comments have `anchor=null` and empty `quoted_text`; inline anchors use the editor's stored positions, not Markdown offsets. Orphaned anchors and resolved threads remain readable. `author` and `creator` contain only nullable `id` and `display_name`, including retained member name snapshots. Stored content and mention shortcodes are preserved. Image-only comments can have empty content. Attachments expose only `id`, `name`, `mimetype`, and `size`; this release does not provide attachment download URLs or binaries through these endpoints.
+
+An accessible resource with no comments returns `items=[]`, `total=0`, and `has_more=false`. An offset beyond the last item returns an empty page with the actual total. Errors follow the existing API: `400` invalid input, `401` invalid key, `403` scope or access denied, `404` missing resource/thread (including a thread from another resource), `429` quota exhausted. This API cannot create, edit, delete, or resolve comments.
+
+Complete traversal example (Python standard library; `OMNIBOX_API_BASE` includes `/v1`, e.g. `${OBB_OPEN_API_BASE_URL}/v1`):
+
+```python
+import json
+import os
+from urllib.parse import quote, urlencode
+from urllib.request import Request, urlopen
+
+base = os.environ['OMNIBOX_API_BASE'].rstrip('/')
+key = os.environ['OMNIBOX_API_KEY']
+resource_id = quote(os.environ['OMNIBOX_RESOURCE_ID'], safe='')
+
+def get_json(path, params):
+    request = Request(
+        f'{base}{path}?{urlencode(params)}',
+        headers={'Authorization': f'Bearer {key}'},
+    )
+    with urlopen(request, timeout=30) as response:
+        return json.load(response)
+
+thread_path = f'/resources/{resource_id}/comment-threads'
+thread_offset = 0
+while True:
+    page = get_json(thread_path, {'type': 'all', 'offset': thread_offset, 'limit': 20})
+    for thread in page['items']:
+        comments = list(thread['comments'])
+        metadata = thread['comments_pagination']
+        comment_offset = metadata['offset'] + len(comments)
+        while metadata['has_more']:
+            path = f"{thread_path}/{quote(thread['id'], safe='')}/comments"
+            reply_page = get_json(path, {'offset': comment_offset, 'limit': 100})
+            if not reply_page['items'] and reply_page['has_more']:
+                raise RuntimeError('Pagination made no progress')
+            comments.extend(reply_page['items'])
+            comment_offset = reply_page['offset'] + len(reply_page['items'])
+            metadata = reply_page
+        print(json.dumps({'thread_id': thread['id'], 'comments': comments}, ensure_ascii=False))
+    if not page['has_more']:
+        break
+    if not page['items']:
+        raise RuntimeError('Pagination made no progress')
+    thread_offset = page['offset'] + len(page['items'])
+```
+
+
 ### Understand OmniBox workspace resource URLs
 
 OmniBox workspace resource URLs use this path route:

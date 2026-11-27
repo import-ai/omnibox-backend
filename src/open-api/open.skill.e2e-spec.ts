@@ -22,5 +22,8 @@ describe('OpenSkillController (e2e)', () => {
     expect(response.text).toContain('/<namespace_id>/<resource_id>');
     expect(response.text).not.toContain('${OBB_OPEN_API_BASE_URL}');
     expect(response.text).not.toContain('OBB_OPEN_API_BASE_URL');
+    expect(response.text).toContain('/resources/<resource_id>/comment-threads');
+    expect(response.text).toContain('/comment-threads/<thread_id>/comments');
+    expect(response.text).toContain('comments_pagination');
   });
 });

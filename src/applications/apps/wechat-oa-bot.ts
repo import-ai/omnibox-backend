@@ -3,10 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
 import { APIKeyService } from 'omniboxd/api-key/api-key.service';
+import { WECHAT_OA_APP_ID } from 'omniboxd/applications/app.constants';
 import { Applications } from 'omniboxd/applications/applications.entity';
 import { BotBase } from 'omniboxd/applications/apps/bot-base';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { getActiveTraceHeaders } from 'omniboxd/tracing/trace-headers';
 import { Repository } from 'typeorm';
 
 const QRCODE_URL_PREFIXES = [
@@ -27,7 +29,7 @@ const QRCODE_URL_PREFIXES = [
  */
 @Injectable()
 export class WechatOaBot extends BotBase {
-  public static readonly appId = 'wechat_oa_bot';
+  public static readonly appId = WECHAT_OA_APP_ID;
   private readonly logger = new Logger(WechatOaBot.name);
   private readonly obbotBaseUrl: string;
 
@@ -84,7 +86,10 @@ export class WechatOaBot extends BotBase {
         {
           signal: AbortSignal.timeout(5000),
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            ...getActiveTraceHeaders(),
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify({ key: attrs.key }),
         },
       );

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { trace } from '@opentelemetry/api';
+import { getActiveTraceHeaders } from 'omniboxd/tracing/trace-headers';
 
 @Injectable()
 export class AttributionReporter {
@@ -34,7 +35,10 @@ export class AttributionReporter {
         `${this.proUrl}/internal/api/v1/attribution/user-events`,
         {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: {
+            ...getActiveTraceHeaders(),
+            'content-type': 'application/json',
+          },
           body: JSON.stringify({ user_id: userId }),
           signal: AbortSignal.timeout(2_000),
         },

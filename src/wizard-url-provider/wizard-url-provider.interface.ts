@@ -10,6 +10,7 @@ export interface WizardBaseUrlResolution {
 }
 
 export interface IWizardUrlProvider {
+  readonly submissionPool?: WizardTarget;
   getBaseUrl(
     namespaceId?: string,
     agentRequest?: WizardAgentRequestDto,

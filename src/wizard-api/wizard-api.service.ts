@@ -36,10 +36,15 @@ export class WizardAPIService {
     private readonly i18n: I18nService,
   ) {}
 
+  get submissionPool() {
+    return this.wizardUrlProvider.submissionPool ?? 'core';
+  }
+
   async getModelsConfig(baseUrl?: string) {
     try {
       baseUrl ??= await this.wizardUrlProvider.getBaseUrl();
       const response = await fetch(`${baseUrl}/api/v1/wizard/models`, {
+        headers: this.getTraceHeaders(),
         signal: AbortSignal.timeout(5000),
       });
       if (response.status === 404) return {};
@@ -154,6 +159,7 @@ export class WizardAPIService {
     requestId: string,
     signal?: AbortSignal,
     resolution?: WizardBaseUrlResolution,
+    steerToken?: string,
   ): Promise<Response> {
     const wizardBaseUrl =
       resolution?.baseUrl ??
@@ -164,6 +170,7 @@ export class WizardAPIService {
       requestId,
     );
 
+    if (steerToken) requestHeaders['X-Steer-Token'] = steerToken;
     const response = await fetch(url, {
       method: 'POST',
       headers: requestHeaders,

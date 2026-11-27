@@ -630,6 +630,31 @@ describe('SearchController (e2e)', () => {
       );
     });
 
+    it('returns only the V1 items/total/offset/limit envelope', async () => {
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/namespaces/${mockNamespaceId}/search`)
+        .set('user', JSON.stringify(mockUser))
+        .send({ query: 'v1-contract', offset: 0, limit: 20 })
+        .expect(HttpStatus.CREATED);
+
+      expect(Object.keys(response.body).sort()).toEqual([
+        'items',
+        'limit',
+        'offset',
+        'total',
+      ]);
+      expect(typeof response.body.total).toBe('number');
+      for (const field of [
+        'search_id',
+        'next_offset',
+        'has_more',
+        'status',
+        'recall_truncated',
+      ]) {
+        expect(response.body).not.toHaveProperty(field);
+      }
+    });
+
     it('should handle special characters in query', async () => {
       const specialQuery = encodeURIComponent('test 测试 🚀 @#$%');
       const response = await request(app.getHttpServer())

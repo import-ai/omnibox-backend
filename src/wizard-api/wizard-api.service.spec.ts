@@ -1,3 +1,6 @@
+import 'reflect-metadata';
+
+import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
 import {
   buildWizardRequestHeaders,
   WizardAPIService,
@@ -30,6 +33,53 @@ describe('buildWizardRequestHeaders', () => {
       'X-Request-Id': 'req-123',
       traceparent: '00-abc-def-01',
     });
+  });
+});
+
+describe('WizardAPIService search', () => {
+  function createService() {
+    return new WizardAPIService(
+      { getBaseUrl: jest.fn().mockResolvedValue('http://wizard') } as any,
+      { t: jest.fn() } as any,
+    );
+  }
+
+  function searchRequest() {
+    const request = new SearchRequestDto();
+    request.query = 'query';
+    request.namespaceId = 'namespace-id';
+    return request;
+  }
+
+  it('maps page metadata from the wizard response', async () => {
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ records: [], has_more: true, partial: true }),
+          { headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+    const response = await createService().search(searchRequest());
+
+    expect(response.hasMore).toBe(true);
+    expect(response.partial).toBe(true);
+    fetchMock.mockRestore();
+  });
+
+  it('keeps page metadata optional for older wizard responses', async () => {
+    const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ records: [] }), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const response = await createService().search(searchRequest());
+
+    expect(response.hasMore).toBeUndefined();
+    expect(response.partial).toBeUndefined();
+    fetchMock.mockRestore();
   });
 });
 
